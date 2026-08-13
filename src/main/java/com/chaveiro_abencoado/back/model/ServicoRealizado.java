@@ -49,6 +49,7 @@ public class ServicoRealizado {
 
     // JSONB do PostgreSQL para dados extras sem migration
     @Column(columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     private String metadados;
 
     @ManyToOne(fetch = FetchType.LAZY)
