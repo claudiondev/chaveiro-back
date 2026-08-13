@@ -53,8 +53,7 @@ class CaixaServiceTest {
 
     @Test
     void deveAbrirCaixa() {
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
-                .thenReturn(Optional.empty());
+        when(fechamentoRepository.existsByData(LocalDate.now())).thenReturn(false);
         when(usuarioRepository.findByEmail("dono@email.com")).thenReturn(Optional.of(usuario));
         when(fechamentoRepository.save(any(FechamentoDiario.class))).thenAnswer(invocation -> {
             FechamentoDiario f = invocation.getArgument(0);
@@ -73,18 +72,14 @@ class CaixaServiceTest {
 
     @Test
     void deveRejeitarCaixaDuplicado() {
-        FechamentoDiario existente = new FechamentoDiario(LocalDate.now(),
-                new BigDecimal("100.00"), usuario);
-
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
-                .thenReturn(Optional.of(existente));
+        when(fechamentoRepository.existsByData(LocalDate.now())).thenReturn(true);
 
         AberturaRequest request = new AberturaRequest();
         request.setValorAbertura(new BigDecimal("200.00"));
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> caixaService.abrirCaixa(request, "dono@email.com"));
-        assertEquals("Já existe um caixa aberto para hoje", ex.getMessage());
+        assertEquals("Já existe um caixa para hoje", ex.getMessage());
     }
 
     @Test

@@ -10,7 +10,9 @@ import java.util.Optional;
 
 public interface FechamentoDiarioRepository extends JpaRepository<FechamentoDiario, Long> {
 
-    Optional<FechamentoDiario> findByData(LocalDate data);
+    boolean existsByData(LocalDate data);
+
+    Optional<FechamentoDiario> findTopByDataOrderByIdDesc(LocalDate data);
 
     Optional<FechamentoDiario> findByDataAndStatus(LocalDate data, StatusFechamento status);
 

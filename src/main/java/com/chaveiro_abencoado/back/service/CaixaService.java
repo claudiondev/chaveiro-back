@@ -37,8 +37,8 @@ public class CaixaService {
 
     @Transactional
     public FechamentoResponse abrirCaixa(AberturaRequest request, String emailUsuario) {
-        if (fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO).isPresent()) {
-            throw new RuntimeException("Já existe um caixa aberto para hoje");
+        if (fechamentoRepository.existsByData(LocalDate.now())) {
+            throw new RuntimeException("Já existe um caixa para hoje");
         }
 
         Usuario usuario = buscarUsuario(emailUsuario);
@@ -49,8 +49,11 @@ public class CaixaService {
     }
 
     public FechamentoResponse consultarHoje() {
-        FechamentoDiario fechamento = fechamentoRepository.findByData(LocalDate.now())
-                .orElseThrow(() -> new RuntimeException("Caixa não foi aberto hoje"));
+        // Prioriza caixa aberto; se não existe, busca o mais recente do dia
+        FechamentoDiario fechamento = fechamentoRepository
+                .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
+                .orElseGet(() -> fechamentoRepository.findTopByDataOrderByIdDesc(LocalDate.now())
+                        .orElseThrow(() -> new RuntimeException("Caixa não foi aberto hoje")));
 
         atualizarTotais(fechamento);
         return FechamentoResponse.fromEntity(fechamento);
