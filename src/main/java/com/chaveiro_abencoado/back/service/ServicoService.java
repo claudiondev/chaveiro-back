@@ -2,6 +2,9 @@ package com.chaveiro_abencoado.back.service;
 
 import com.chaveiro_abencoado.back.dto.ServicoDTO;
 import com.chaveiro_abencoado.back.dto.ServicoRequest;
+import com.chaveiro_abencoado.back.exception.BusinessException;
+import com.chaveiro_abencoado.back.exception.NotFoundException;
+import com.chaveiro_abencoado.back.exception.UnauthorizedException;
 import com.chaveiro_abencoado.back.model.*;
 import com.chaveiro_abencoado.back.repository.FechamentoDiarioRepository;
 import com.chaveiro_abencoado.back.repository.MovimentacaoCaixaRepository;
@@ -39,10 +42,7 @@ public class ServicoService {
 
     @Transactional
     public ServicoDTO registrar(ServicoRequest request, String emailUsuario) {
-        FechamentoDiario caixaAberto = fechamentoRepository
-                .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
-                .orElseThrow(() -> new RuntimeException("Caixa não está aberto. Abra o caixa antes de registrar serviços"));
-
+        FechamentoDiario caixaAberto = buscarCaixaAberto();
         Usuario usuario = buscarUsuario(emailUsuario);
         TipoServico tipoServico = tipoServicoService.buscarPorId(request.getTipoServicoId());
 
@@ -50,7 +50,7 @@ public class ServicoService {
         servicoRepository.save(servico);
 
         // Garantia não gera movimentação de entrada
-        if (!servico.isGarantia()) {
+        if (!servico.isGarantia() && servico.getStatusPagamento() == StatusPagamento.PAGO) {
             gerarMovimentacaoEntrada(servico, usuario, caixaAberto);
         }
 
@@ -66,16 +66,65 @@ public class ServicoService {
                 .toList();
     }
 
+    // Contas a receber: serviços com pagamento pendente
+    public List<ServicoDTO> listarPendentes() {
+        return servicoRepository.findByStatusPagamento(StatusPagamento.PENDENTE).stream()
+                .map(ServicoDTO::fromEntity)
+                .toList();
+    }
+
+    // Marcar serviço pendente como pago
     @Transactional
-    public void cancelar(Long id) {
+    public ServicoDTO marcarComoPago(Long id, String emailUsuario) {
         ServicoRealizado servico = servicoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Serviço não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Serviço não encontrado"));
+
+        if (servico.getStatusPagamento() == StatusPagamento.PAGO) {
+            throw new BusinessException("Serviço já está pago");
+        }
+
+        servico.setStatusPagamento(StatusPagamento.PAGO);
+        servicoRepository.save(servico);
+
+        // Gera movimentação de entrada agora que foi pago
+        Usuario usuario = buscarUsuario(emailUsuario);
+        FechamentoDiario caixaAberto = buscarCaixaAberto();
+        gerarMovimentacaoEntrada(servico, usuario, caixaAberto);
+
+        return ServicoDTO.fromEntity(servico);
+    }
+
+    @Transactional
+    public void cancelar(Long id, String emailUsuario) {
+        ServicoRealizado servico = servicoRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Serviço não encontrado"));
 
         if (!servico.getDataHora().toLocalDate().equals(LocalDate.now())) {
-            throw new RuntimeException("Só é possível cancelar serviços do dia atual");
+            throw new BusinessException("Só é possível cancelar serviços do dia atual");
+        }
+
+        // Verificar se é o dono do serviço ou DONO do sistema
+        Usuario usuario = buscarUsuario(emailUsuario);
+        if (!servico.getUsuario().getId().equals(usuario.getId())
+                && usuario.getRole() != UserRole.DONO) {
+            throw new UnauthorizedException("Sem permissão para cancelar este serviço");
+        }
+
+        // Remover movimentação de entrada associada (fix: movimentação órfã)
+        if (!servico.isGarantia()) {
+            movimentacaoRepository.deleteByDescricaoAndFechamentoDiarioId(
+                    "Serviço: " + servico.getTipoServico().getNome(),
+                    servico.getFechamentoDiario().getId()
+            );
         }
 
         servicoRepository.delete(servico);
+    }
+
+    private FechamentoDiario buscarCaixaAberto() {
+        return fechamentoRepository
+                .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
+                .orElseThrow(() -> new BusinessException("Caixa não está aberto. Abra o caixa antes de registrar serviços"));
     }
 
     private ServicoRealizado toEntity(ServicoRequest request, TipoServico tipoServico,
@@ -127,6 +176,6 @@ public class ServicoService {
 
     private Usuario buscarUsuario(String email) {
         return usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Usuário não encontrado"));
     }
 }

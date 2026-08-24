@@ -3,14 +3,16 @@ package com.chaveiro_abencoado.back.controller;
 import com.chaveiro_abencoado.back.dto.CadastroRequest;
 import com.chaveiro_abencoado.back.dto.LoginRequest;
 import com.chaveiro_abencoado.back.dto.TokenResponse;
+import com.chaveiro_abencoado.back.model.Usuario;
 import com.chaveiro_abencoado.back.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -32,5 +34,35 @@ public class AuthController {
     public ResponseEntity<TokenResponse> cadastrar(@Valid @RequestBody CadastroRequest request) {
         TokenResponse response = authService.cadastrar(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PutMapping("/senha")
+    public ResponseEntity<Map<String, String>> alterarSenha(@RequestBody Map<String, String> body,
+                                                             Authentication authentication) {
+        authService.alterarSenha(
+                authentication.getName(),
+                body.get("senhaAtual"),
+                body.get("novaSenha")
+        );
+        return ResponseEntity.ok(Map.of("mensagem", "Senha alterada com sucesso"));
+    }
+
+    @GetMapping("/usuarios")
+    public ResponseEntity<List<Map<String, Object>>> listarFuncionarios() {
+        List<Map<String, Object>> funcionarios = authService.listarFuncionarios().stream()
+                .map(u -> Map.<String, Object>of(
+                        "id", u.getId(),
+                        "nome", u.getNome(),
+                        "email", u.getEmail(),
+                        "ativo", u.isAtivo()
+                ))
+                .toList();
+        return ResponseEntity.ok(funcionarios);
+    }
+
+    @PatchMapping("/usuarios/{id}/status")
+    public ResponseEntity<Map<String, String>> alterarStatusUsuario(@PathVariable Long id) {
+        authService.desativarUsuario(id);
+        return ResponseEntity.ok(Map.of("mensagem", "Status alterado com sucesso"));
     }
 }

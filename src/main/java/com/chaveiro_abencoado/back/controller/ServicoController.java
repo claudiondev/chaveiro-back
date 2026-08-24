@@ -37,9 +37,22 @@ public class ServicoController {
         return ResponseEntity.ok(servicoService.listarPorData(filtro));
     }
 
+    // Contas a receber
+    @GetMapping("/pendentes")
+    public ResponseEntity<List<ServicoDTO>> listarPendentes() {
+        return ResponseEntity.ok(servicoService.listarPendentes());
+    }
+
+    // Marcar como pago
+    @PatchMapping("/{id}/pagar")
+    public ResponseEntity<ServicoDTO> marcarComoPago(@PathVariable Long id,
+                                                      Authentication authentication) {
+        return ResponseEntity.ok(servicoService.marcarComoPago(id, authentication.getName()));
+    }
+
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> cancelar(@PathVariable Long id) {
-        servicoService.cancelar(id);
+    public ResponseEntity<Void> cancelar(@PathVariable Long id, Authentication authentication) {
+        servicoService.cancelar(id, authentication.getName());
         return ResponseEntity.noContent().build();
     }
 }

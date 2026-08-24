@@ -5,11 +5,13 @@ import com.chaveiro_abencoado.back.dto.FechamentoResponse;
 import com.chaveiro_abencoado.back.dto.MovimentacaoRequest;
 import com.chaveiro_abencoado.back.service.CaixaService;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
@@ -32,6 +34,13 @@ public class CaixaController {
     @GetMapping("/hoje")
     public ResponseEntity<FechamentoResponse> consultarHoje() {
         return ResponseEntity.ok(caixaService.consultarHoje());
+    }
+
+    // Histórico: consultar caixa de qualquer data
+    @GetMapping("/historico")
+    public ResponseEntity<FechamentoResponse> consultarHistorico(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data) {
+        return ResponseEntity.ok(caixaService.consultarPorData(data));
     }
 
     @PostMapping("/movimentacao")

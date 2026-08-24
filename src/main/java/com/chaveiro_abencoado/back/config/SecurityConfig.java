@@ -1,5 +1,6 @@
 package com.chaveiro_abencoado.back.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -14,6 +15,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -21,6 +23,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
+
+    @Value("${cors.origins:http://localhost:5173,http://localhost:5174,http://localhost:3000}")
+    private String corsOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
         this.jwtFilter = jwtFilter;
@@ -36,6 +41,9 @@ public class SecurityConfig {
                 // Auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/cadastro").hasRole("DONO")
+                .requestMatchers(HttpMethod.PUT, "/api/auth/senha").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/auth/usuarios").hasRole("DONO")
+                .requestMatchers(HttpMethod.PATCH, "/api/auth/usuarios/*/status").hasRole("DONO")
 
                 // Swagger
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
@@ -46,14 +54,17 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/tipos-servico/**").hasRole("DONO")
                 .requestMatchers(HttpMethod.DELETE, "/api/tipos-servico/**").hasRole("DONO")
 
-                // Caixa — fechamento só pro dono
+                // Caixa — fechamento e histórico só pro dono
                 .requestMatchers(HttpMethod.POST, "/api/caixa/fechamento").hasRole("DONO")
+                .requestMatchers(HttpMethod.GET, "/api/caixa/historico").hasRole("DONO")
                 .requestMatchers("/api/caixa/**").authenticated()
 
                 // Relatórios — só dono
                 .requestMatchers("/api/relatorios/**").hasRole("DONO")
 
-                // Serviços — qualquer autenticado
+                // Serviços — pendentes e pagar só dono
+                .requestMatchers(HttpMethod.GET, "/api/servicos/pendentes").hasRole("DONO")
+                .requestMatchers(HttpMethod.PATCH, "/api/servicos/*/pagar").authenticated()
                 .requestMatchers("/api/servicos/**").authenticated()
 
                 .anyRequest().authenticated()
@@ -66,7 +77,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:3000"));
+        config.setAllowedOrigins(Arrays.asList(corsOrigins.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

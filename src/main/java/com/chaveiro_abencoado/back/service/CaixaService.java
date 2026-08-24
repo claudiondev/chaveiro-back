@@ -3,6 +3,8 @@ package com.chaveiro_abencoado.back.service;
 import com.chaveiro_abencoado.back.dto.AberturaRequest;
 import com.chaveiro_abencoado.back.dto.FechamentoResponse;
 import com.chaveiro_abencoado.back.dto.MovimentacaoRequest;
+import com.chaveiro_abencoado.back.exception.BusinessException;
+import com.chaveiro_abencoado.back.exception.NotFoundException;
 import com.chaveiro_abencoado.back.model.*;
 import com.chaveiro_abencoado.back.repository.FechamentoDiarioRepository;
 import com.chaveiro_abencoado.back.repository.MovimentacaoCaixaRepository;
@@ -38,7 +40,7 @@ public class CaixaService {
     @Transactional
     public FechamentoResponse abrirCaixa(AberturaRequest request, String emailUsuario) {
         if (fechamentoRepository.existsByData(LocalDate.now())) {
-            throw new RuntimeException("Já existe um caixa para hoje");
+            throw new BusinessException("Já existe um caixa para hoje");
         }
 
         Usuario usuario = buscarUsuario(emailUsuario);
@@ -49,13 +51,21 @@ public class CaixaService {
     }
 
     public FechamentoResponse consultarHoje() {
-        // Prioriza caixa aberto; se não existe, busca o mais recente do dia
         FechamentoDiario fechamento = fechamentoRepository
                 .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
                 .orElseGet(() -> fechamentoRepository.findTopByDataOrderByIdDesc(LocalDate.now())
-                        .orElseThrow(() -> new RuntimeException("Caixa não foi aberto hoje")));
+                        .orElseThrow(() -> new NotFoundException("Caixa não foi aberto hoje")));
 
         atualizarTotais(fechamento);
+        return FechamentoResponse.fromEntity(fechamento);
+    }
+
+    // Histórico: consultar caixa de qualquer data
+    public FechamentoResponse consultarPorData(LocalDate data) {
+        FechamentoDiario fechamento = fechamentoRepository.findTopByDataOrderByIdDesc(data)
+                .orElseThrow(() -> new NotFoundException("Nenhum caixa encontrado para " + data));
+
+        atualizarTotais(fechamento, data);
         return FechamentoResponse.fromEntity(fechamento);
     }
 
@@ -63,7 +73,7 @@ public class CaixaService {
     public void registrarMovimentacao(MovimentacaoRequest request, String emailUsuario) {
         FechamentoDiario caixaAberto = fechamentoRepository
                 .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
-                .orElseThrow(() -> new RuntimeException("Caixa não está aberto"));
+                .orElseThrow(() -> new BusinessException("Caixa não está aberto"));
 
         Usuario usuario = buscarUsuario(emailUsuario);
 
@@ -83,7 +93,7 @@ public class CaixaService {
     public FechamentoResponse fecharCaixa(String observacao) {
         FechamentoDiario fechamento = fechamentoRepository
                 .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
-                .orElseThrow(() -> new RuntimeException("Nenhum caixa aberto para fechar"));
+                .orElseThrow(() -> new BusinessException("Nenhum caixa aberto para fechar"));
 
         atualizarTotais(fechamento);
         fechamento.setStatus(StatusFechamento.FECHADO);
@@ -94,6 +104,10 @@ public class CaixaService {
     }
 
     private void atualizarTotais(FechamentoDiario fechamento) {
+        atualizarTotais(fechamento, LocalDate.now());
+    }
+
+    private void atualizarTotais(FechamentoDiario fechamento, LocalDate data) {
         List<MovimentacaoCaixa> movimentacoes = movimentacaoRepository
                 .findByFechamentoDiarioId(fechamento.getId());
 
@@ -107,8 +121,8 @@ public class CaixaService {
                 .map(MovimentacaoCaixa::getValor)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        LocalDateTime inicioDia = LocalDate.now().atStartOfDay();
-        LocalDateTime fimDia = LocalDate.now().atTime(LocalTime.MAX);
+        LocalDateTime inicioDia = data.atStartOfDay();
+        LocalDateTime fimDia = data.atTime(LocalTime.MAX);
 
         List<ServicoRealizado> servicos = servicoRepository.findByDataHoraBetween(inicioDia, fimDia);
         int totalServicos = servicos.size();
@@ -123,6 +137,6 @@ public class CaixaService {
 
     private Usuario buscarUsuario(String email) {
         return usuarioRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+                .orElseThrow(() -> new NotFoundException("Usuário não encontrado"));
     }
 }

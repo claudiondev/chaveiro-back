@@ -143,7 +143,7 @@ class ServicoServiceTest {
 
         when(servicoRepository.findById(1L)).thenReturn(Optional.of(servico));
 
-        assertThrows(RuntimeException.class, () -> servicoService.cancelar(1L));
+        assertThrows(RuntimeException.class, () -> servicoService.cancelar(1L, "func@email.com"));
     }
 
     private ServicoRequest criarRequest(Long tipoId, int qtd, FormaPagamento forma,

@@ -8,4 +8,6 @@ import java.util.List;
 public interface MovimentacaoCaixaRepository extends JpaRepository<MovimentacaoCaixa, Long> {
 
     List<MovimentacaoCaixa> findByFechamentoDiarioId(Long fechamentoDiarioId);
+
+    void deleteByDescricaoAndFechamentoDiarioId(String descricao, Long fechamentoDiarioId);
 }

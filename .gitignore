@@ -36,3 +36,4 @@ build/
 CLAUDE.md
 .env
 .claude/
+.vite/
