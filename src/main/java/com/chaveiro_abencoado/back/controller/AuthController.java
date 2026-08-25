@@ -1,5 +1,6 @@
 package com.chaveiro_abencoado.back.controller;
 
+import com.chaveiro_abencoado.back.dto.AlterarSenhaRequest;
 import com.chaveiro_abencoado.back.dto.CadastroRequest;
 import com.chaveiro_abencoado.back.dto.LoginRequest;
 import com.chaveiro_abencoado.back.dto.TokenResponse;
@@ -37,12 +38,12 @@ public class AuthController {
     }
 
     @PutMapping("/senha")
-    public ResponseEntity<Map<String, String>> alterarSenha(@RequestBody Map<String, String> body,
+    public ResponseEntity<Map<String, String>> alterarSenha(@Valid @RequestBody AlterarSenhaRequest request,
                                                              Authentication authentication) {
         authService.alterarSenha(
                 authentication.getName(),
-                body.get("senhaAtual"),
-                body.get("novaSenha")
+                request.getSenhaAtual(),
+                request.getNovaSenha()
         );
         return ResponseEntity.ok(Map.of("mensagem", "Senha alterada com sucesso"));
     }

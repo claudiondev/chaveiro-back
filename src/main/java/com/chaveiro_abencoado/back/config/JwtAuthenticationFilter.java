@@ -1,5 +1,7 @@
 package com.chaveiro_abencoado.back.config;
 
+import com.chaveiro_abencoado.back.model.Usuario;
+import com.chaveiro_abencoado.back.repository.UsuarioRepository;
 import com.chaveiro_abencoado.back.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -13,14 +15,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final UsuarioRepository usuarioRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, UsuarioRepository usuarioRepository) {
         this.jwtService = jwtService;
+        this.usuarioRepository = usuarioRepository;
     }
 
     @Override
@@ -37,9 +42,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String email = jwtService.extrairEmail(token);
                 String role = jwtService.extrairRole(token);
 
-                var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
-                var authentication = new UsernamePasswordAuthenticationToken(email, null, authorities);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                // Verificar se o usuário ainda está ativo no banco
+                Optional<Usuario> usuario = usuarioRepository.findByEmail(email);
+                if (usuario.isPresent() && usuario.get().isAtivo()) {
+                    var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
+                    var authentication = new UsernamePasswordAuthenticationToken(email, null, authorities);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
             }
         }
 

@@ -50,6 +50,7 @@ public class CaixaService {
         return FechamentoResponse.fromEntity(fechamento);
     }
 
+    @Transactional
     public FechamentoResponse consultarHoje() {
         FechamentoDiario fechamento = fechamentoRepository
                 .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
@@ -57,15 +58,18 @@ public class CaixaService {
                         .orElseThrow(() -> new NotFoundException("Caixa não foi aberto hoje")));
 
         atualizarTotais(fechamento);
+        fechamentoRepository.save(fechamento);
         return FechamentoResponse.fromEntity(fechamento);
     }
 
     // Histórico: consultar caixa de qualquer data
+    @Transactional
     public FechamentoResponse consultarPorData(LocalDate data) {
         FechamentoDiario fechamento = fechamentoRepository.findTopByDataOrderByIdDesc(data)
                 .orElseThrow(() -> new NotFoundException("Nenhum caixa encontrado para " + data));
 
         atualizarTotais(fechamento, data);
+        fechamentoRepository.save(fechamento);
         return FechamentoResponse.fromEntity(fechamento);
     }
 

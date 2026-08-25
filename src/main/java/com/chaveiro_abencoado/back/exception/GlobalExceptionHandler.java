@@ -44,13 +44,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> tratarRuntime(RuntimeException ex) {
-        HttpStatus status = HttpStatus.BAD_REQUEST;
-
-        if (ex.getMessage() != null && ex.getMessage().contains("não encontrad")) {
-            status = HttpStatus.NOT_FOUND;
-        }
-
-        return buildResponse(ex.getMessage(), status);
+        log.warn("RuntimeException não tratada: ", ex);
+        return buildResponse("Erro inesperado na operação", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     @ExceptionHandler(Exception.class)

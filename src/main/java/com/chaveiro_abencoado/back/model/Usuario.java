@@ -1,5 +1,6 @@
 package com.chaveiro_abencoado.back.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ public class  Usuario {
     @Column(nullable = false, unique = true, length = 150)
     private String email;
 
+    @JsonIgnore
     @Column(nullable = false)
     private String senha;
 

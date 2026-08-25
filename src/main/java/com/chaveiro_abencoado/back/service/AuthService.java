@@ -104,9 +104,16 @@ public class AuthService {
     }
 
     private void verificarBloqueio(String email) {
+        // Limpar entradas expiradas para evitar memory leak
+        long agora = System.currentTimeMillis();
+        tentativasLogin.entrySet().removeIf(entry -> {
+            long[] d = entry.getValue();
+            return d[0] >= MAX_TENTATIVAS && (agora - d[1]) >= BLOQUEIO_MS;
+        });
+
         long[] dados = tentativasLogin.get(email);
         if (dados != null && dados[0] >= MAX_TENTATIVAS) {
-            long tempoDecorrido = System.currentTimeMillis() - dados[1];
+            long tempoDecorrido = agora - dados[1];
             if (tempoDecorrido < BLOQUEIO_MS) {
                 long minutosRestantes = (BLOQUEIO_MS - tempoDecorrido) / 60000 + 1;
                 throw new BusinessException("Muitas tentativas. Tente novamente em " + minutosRestantes + " minuto(s)");

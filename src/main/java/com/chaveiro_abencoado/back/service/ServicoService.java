@@ -110,10 +110,10 @@ public class ServicoService {
             throw new UnauthorizedException("Sem permissão para cancelar este serviço");
         }
 
-        // Remover movimentação de entrada associada (fix: movimentação órfã)
+        // Remover movimentação de entrada associada (usa ID do serviço para precisão)
         if (!servico.isGarantia()) {
-            movimentacaoRepository.deleteByDescricaoAndFechamentoDiarioId(
-                    "Serviço: " + servico.getTipoServico().getNome(),
+            movimentacaoRepository.deleteByDescricaoStartingWithAndFechamentoDiarioId(
+                    "Serviço #" + servico.getId() + ":",
                     servico.getFechamentoDiario().getId()
             );
         }
@@ -167,11 +167,15 @@ public class ServicoService {
         MovimentacaoCaixa movimentacao = new MovimentacaoCaixa();
         movimentacao.setTipo(TipoMovimentacao.ENTRADA);
         movimentacao.setValor(servico.getValorTotal());
-        movimentacao.setDescricao("Serviço: " + servico.getTipoServico().getNome());
+        movimentacao.setDescricao(descricaoMovimentacao(servico));
         movimentacao.setDataHora(LocalDateTime.now());
         movimentacao.setUsuario(usuario);
         movimentacao.setFechamentoDiario(fechamento);
         movimentacaoRepository.save(movimentacao);
+    }
+
+    private String descricaoMovimentacao(ServicoRealizado servico) {
+        return "Serviço #" + servico.getId() + ": " + servico.getTipoServico().getNome();
     }
 
     private Usuario buscarUsuario(String email) {
