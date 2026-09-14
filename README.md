@@ -292,7 +292,7 @@ O frontend do Chaveiro Abençoado é desenvolvido em **React 18 + Vite + Tailwin
 **Claudio Nascimento**
 
 - 🔗 GitHub: [@claudiondev](https://github.com/claudiondev)
-- 📧 Email: claudioncruz152@gmail.com
+- 📧 Email: claudiondev@gmail.com
 
 ---
 
