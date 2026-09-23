@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class FechamentoResponse {
@@ -20,6 +21,8 @@ public class FechamentoResponse {
     private Integer totalChaves;
     private StatusFechamento status;
     private String observacao;
+    // Detalhamento por tipo; preenchido em /hoje e /historico?data= (vazio na lista paginada)
+    private List<ServicoResumoDTO> servicos;
 
     public static FechamentoResponse fromEntity(FechamentoDiario entity) {
         FechamentoResponse dto = new FechamentoResponse();

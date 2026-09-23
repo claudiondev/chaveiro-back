@@ -2,6 +2,8 @@ package com.chaveiro_abencoado.back.repository;
 
 import com.chaveiro_abencoado.back.model.FechamentoDiario;
 import com.chaveiro_abencoado.back.model.StatusFechamento;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
@@ -17,4 +19,6 @@ public interface FechamentoDiarioRepository extends JpaRepository<FechamentoDiar
     Optional<FechamentoDiario> findByDataAndStatus(LocalDate data, StatusFechamento status);
 
     List<FechamentoDiario> findByDataBetween(LocalDate inicio, LocalDate fim);
+
+    Page<FechamentoDiario> findByStatusOrderByDataDescIdDesc(StatusFechamento status, Pageable pageable);
 }

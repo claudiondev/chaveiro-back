@@ -3,6 +3,7 @@ package com.chaveiro_abencoado.back.service;
 import com.chaveiro_abencoado.back.dto.AberturaRequest;
 import com.chaveiro_abencoado.back.dto.FechamentoResponse;
 import com.chaveiro_abencoado.back.dto.MovimentacaoRequest;
+import com.chaveiro_abencoado.back.dto.ServicoResumoDTO;
 import com.chaveiro_abencoado.back.exception.BusinessException;
 import com.chaveiro_abencoado.back.exception.NotFoundException;
 import com.chaveiro_abencoado.back.model.*;
@@ -12,12 +13,17 @@ import com.chaveiro_abencoado.back.repository.ServicoRealizadoRepository;
 import com.chaveiro_abencoado.back.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class CaixaService {
@@ -57,9 +63,12 @@ public class CaixaService {
                 .orElseGet(() -> fechamentoRepository.findTopByDataOrderByIdDesc(LocalDate.now())
                         .orElseThrow(() -> new NotFoundException("Caixa não foi aberto hoje")));
 
-        atualizarTotais(fechamento);
+        List<ServicoRealizado> servicos = atualizarTotais(fechamento);
         fechamentoRepository.save(fechamento);
-        return FechamentoResponse.fromEntity(fechamento);
+
+        FechamentoResponse response = FechamentoResponse.fromEntity(fechamento);
+        response.setServicos(resumirPorTipo(servicos));
+        return response;
     }
 
     // Histórico: consultar caixa de qualquer data
@@ -68,9 +77,22 @@ public class CaixaService {
         FechamentoDiario fechamento = fechamentoRepository.findTopByDataOrderByIdDesc(data)
                 .orElseThrow(() -> new NotFoundException("Nenhum caixa encontrado para " + data));
 
-        atualizarTotais(fechamento, data);
+        List<ServicoRealizado> servicos = atualizarTotais(fechamento, data);
         fechamentoRepository.save(fechamento);
-        return FechamentoResponse.fromEntity(fechamento);
+
+        FechamentoResponse response = FechamentoResponse.fromEntity(fechamento);
+        response.setServicos(resumirPorTipo(servicos));
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FechamentoResponse> listarHistorico(int pagina, int tamanho) {
+        return fechamentoRepository
+                .findByStatusOrderByDataDescIdDesc(
+                        StatusFechamento.FECHADO,
+                        PageRequest.of(pagina, tamanho)
+                )
+                .map(FechamentoResponse::fromEntity);
     }
 
     @Transactional
@@ -107,11 +129,11 @@ public class CaixaService {
         return FechamentoResponse.fromEntity(fechamento);
     }
 
-    private void atualizarTotais(FechamentoDiario fechamento) {
-        atualizarTotais(fechamento, LocalDate.now());
+    private List<ServicoRealizado> atualizarTotais(FechamentoDiario fechamento) {
+        return atualizarTotais(fechamento, LocalDate.now());
     }
 
-    private void atualizarTotais(FechamentoDiario fechamento, LocalDate data) {
+    private List<ServicoRealizado> atualizarTotais(FechamentoDiario fechamento, LocalDate data) {
         List<MovimentacaoCaixa> movimentacoes = movimentacaoRepository
                 .findByFechamentoDiarioId(fechamento.getId());
 
@@ -137,6 +159,24 @@ public class CaixaService {
         fechamento.setSaldoFinal(fechamento.getValorAbertura().add(entradas).subtract(saidas));
         fechamento.setTotalServicos(totalServicos);
         fechamento.setTotalChaves(totalChaves);
+        return servicos;
+    }
+
+    // Agrupa por nome do tipo, ordenado do maior valor pro menor
+    private List<ServicoResumoDTO> resumirPorTipo(List<ServicoRealizado> servicos) {
+        Map<String, ServicoResumoDTO> porNome = new LinkedHashMap<>();
+        for (ServicoRealizado s : servicos) {
+            porNome.merge(
+                    s.getTipoServico().getNome(),
+                    new ServicoResumoDTO(s.getTipoServico().getNome(), s.getQuantidade(), s.getValorTotal()),
+                    (a, b) -> new ServicoResumoDTO(a.nome(), a.quantidade() + b.quantidade(),
+                            a.valorTotal().add(b.valorTotal()))
+            );
+        }
+        return porNome.values().stream()
+                .sorted(Comparator.comparing(ServicoResumoDTO::valorTotal).reversed()
+                        .thenComparing(ServicoResumoDTO::nome))
+                .toList();
     }
 
     private Usuario buscarUsuario(String email) {

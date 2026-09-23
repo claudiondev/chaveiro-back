@@ -56,7 +56,7 @@ public class SecurityConfig {
 
                 // Caixa — fechamento e histórico só pro dono
                 .requestMatchers(HttpMethod.POST, "/api/caixa/fechamento").hasRole("DONO")
-                .requestMatchers(HttpMethod.GET, "/api/caixa/historico").hasRole("DONO")
+                .requestMatchers(HttpMethod.GET, "/api/caixa/historico", "/api/caixa/historico/**").hasRole("DONO")
                 .requestMatchers("/api/caixa/**").authenticated()
 
                 // Relatórios — só dono

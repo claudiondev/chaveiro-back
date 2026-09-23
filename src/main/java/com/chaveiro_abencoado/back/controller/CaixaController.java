@@ -3,11 +3,15 @@ package com.chaveiro_abencoado.back.controller;
 import com.chaveiro_abencoado.back.dto.AberturaRequest;
 import com.chaveiro_abencoado.back.dto.FechamentoResponse;
 import com.chaveiro_abencoado.back.dto.MovimentacaoRequest;
+import com.chaveiro_abencoado.back.dto.PaginaResponse;
 import com.chaveiro_abencoado.back.service.CaixaService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +20,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/caixa")
+@Validated
 public class CaixaController {
 
     private final CaixaService caixaService;
@@ -41,6 +46,13 @@ public class CaixaController {
     public ResponseEntity<FechamentoResponse> consultarHistorico(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data) {
         return ResponseEntity.ok(caixaService.consultarPorData(data));
+    }
+
+    @GetMapping("/historico/lista")
+    public ResponseEntity<PaginaResponse<FechamentoResponse>> listarHistorico(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(50) int size) {
+        return ResponseEntity.ok(PaginaResponse.from(caixaService.listarHistorico(page, size)));
     }
 
     @PostMapping("/movimentacao")
