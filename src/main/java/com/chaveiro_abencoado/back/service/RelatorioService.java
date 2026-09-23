@@ -75,11 +75,12 @@ public class RelatorioService {
         List<ServicoRealizado> servicos = servicosDosCaixas(fechamentos);
         List<MovimentacaoCaixa> movimentacoes = movimentacaoRepository.findByFechamentoDiarioIdIn(ids(fechamentos));
 
-        // Entradas por forma de pagamento (só serviços pagos e não-garantia)
+        // Entradas por forma de pagamento; a soma fecha com totalEntradas (avulsas em AVULSA)
         Map<String, BigDecimal> porPagamento = new HashMap<>();
-        for (ServicoRealizado servico : servicos) {
-            if (!servico.isGarantia() && servico.getStatusPagamento() == StatusPagamento.PAGO) {
-                porPagamento.merge(servico.getFormaPagamento().name(), servico.getValorTotal(), BigDecimal::add);
+        for (MovimentacaoCaixa mov : movimentacoes) {
+            if (mov.getTipo() == TipoMovimentacao.ENTRADA) {
+                String forma = mov.getFormaPagamento() != null ? mov.getFormaPagamento().name() : "AVULSA";
+                porPagamento.merge(forma, mov.getValor(), BigDecimal::add);
             }
         }
         response.setEntradasPorFormaPagamento(porPagamento);

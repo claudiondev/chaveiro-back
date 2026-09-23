@@ -171,6 +171,7 @@ public class ServicoService {
         MovimentacaoCaixa movimentacao = new MovimentacaoCaixa();
         movimentacao.setTipo(TipoMovimentacao.ENTRADA);
         movimentacao.setValor(servico.getValorTotal());
+        movimentacao.setFormaPagamento(servico.getFormaPagamento());
         movimentacao.setDescricao(descricaoMovimentacao(servico));
         movimentacao.setDataHora(LocalDateTime.now());
         movimentacao.setUsuario(usuario);

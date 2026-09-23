@@ -21,6 +21,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,7 +77,7 @@ class ServicoServiceTest {
 
         assertEquals(new BigDecimal("30.00"), dto.getValorTotal());
         assertEquals("Chave simples", dto.getTipoServicoNome());
-        verify(movimentacaoRepository).save(any(MovimentacaoCaixa.class));
+        verify(movimentacaoRepository).save(argThat(m -> m.getFormaPagamento() == FormaPagamento.PIX));
     }
 
     @Test

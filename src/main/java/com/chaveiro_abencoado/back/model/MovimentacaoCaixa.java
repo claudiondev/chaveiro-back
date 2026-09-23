@@ -27,6 +27,11 @@ public class MovimentacaoCaixa {
     @Column(length = 20)
     private CategoriaSaida categoriaSaida;
 
+    // Só em ENTRADA de serviço; entrada avulsa fica sem forma
+    @Enumerated(EnumType.STRING)
+    @Column(name = "forma_pagamento", length = 20)
+    private FormaPagamento formaPagamento;
+
     @Column(nullable = false)
     private LocalDateTime dataHora;
 
@@ -102,5 +107,13 @@ public class MovimentacaoCaixa {
 
     public void setFechamentoDiario(FechamentoDiario fechamentoDiario) {
         this.fechamentoDiario = fechamentoDiario;
+    }
+
+    public FormaPagamento getFormaPagamento() {
+        return formaPagamento;
+    }
+
+    public void setFormaPagamento(FormaPagamento formaPagamento) {
+        this.formaPagamento = formaPagamento;
     }
 }

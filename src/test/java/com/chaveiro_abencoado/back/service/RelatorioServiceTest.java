@@ -73,6 +73,27 @@ class RelatorioServiceTest {
     }
 
     @Test
+    void entradasPorFormaDevemFecharComOFaturamento() {
+        comCaixas(caixa);
+        comServicos();
+        comMovimentacoes(
+                entrada("20.00", FormaPagamento.PIX),
+                entrada("15.00", FormaPagamento.PIX),
+                // Fiado de outro dia pago hoje em dinheiro
+                entrada("80.00", FormaPagamento.DINHEIRO),
+                entrada("30.00", null)
+        );
+
+        RelatorioResponse r = relatorioService.relatorioDiario(dia);
+
+        assertEquals(new BigDecimal("35.00"), r.getEntradasPorFormaPagamento().get("PIX"));
+        assertEquals(new BigDecimal("80.00"), r.getEntradasPorFormaPagamento().get("DINHEIRO"));
+        assertEquals(new BigDecimal("30.00"), r.getEntradasPorFormaPagamento().get("AVULSA"));
+        BigDecimal soma = r.getEntradasPorFormaPagamento().values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(r.getTotalEntradas(), soma);
+    }
+
+    @Test
     void deveContarServicosEChavesPeloVinculoComOCaixa() {
         comCaixas(caixa);
         comServicos(
@@ -138,6 +159,7 @@ class RelatorioServiceTest {
 
     private MovimentacaoCaixa entrada(String valor, FormaPagamento forma) {
         MovimentacaoCaixa m = movimentacao(TipoMovimentacao.ENTRADA, valor);
+        m.setFormaPagamento(forma);
         return m;
     }
 
