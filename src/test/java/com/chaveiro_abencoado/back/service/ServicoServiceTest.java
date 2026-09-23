@@ -2,6 +2,7 @@ package com.chaveiro_abencoado.back.service;
 
 import com.chaveiro_abencoado.back.dto.ServicoDTO;
 import com.chaveiro_abencoado.back.dto.ServicoRequest;
+import com.chaveiro_abencoado.back.exception.BusinessException;
 import com.chaveiro_abencoado.back.model.*;
 import com.chaveiro_abencoado.back.repository.FechamentoDiarioRepository;
 import com.chaveiro_abencoado.back.repository.MovimentacaoCaixaRepository;
@@ -144,6 +145,23 @@ class ServicoServiceTest {
         when(servicoRepository.findById(1L)).thenReturn(Optional.of(servico));
 
         assertThrows(RuntimeException.class, () -> servicoService.cancelar(1L, "func@email.com"));
+    }
+
+    @Test
+    void deveRejeitarCancelamentoComCaixaFechado() {
+        caixa.setStatus(StatusFechamento.FECHADO);
+        ServicoRealizado servico = new ServicoRealizado();
+        servico.setId(1L);
+        servico.setDataHora(LocalDateTime.now());
+        servico.setFechamentoDiario(caixa);
+
+        when(servicoRepository.findById(1L)).thenReturn(Optional.of(servico));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> servicoService.cancelar(1L, "func@email.com"));
+        assertEquals("Caixa já fechado; não é possível cancelar o serviço", ex.getMessage());
+        verify(movimentacaoRepository, never()).deleteByDescricaoStartingWithAndFechamentoDiarioId(any(), any());
+        verify(servicoRepository, never()).delete(any());
     }
 
     private ServicoRequest criarRequest(Long tipoId, int qtd, FormaPagamento forma,

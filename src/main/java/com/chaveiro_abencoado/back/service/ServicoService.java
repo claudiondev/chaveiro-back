@@ -103,6 +103,10 @@ public class ServicoService {
             throw new BusinessException("Só é possível cancelar serviços do dia atual");
         }
 
+        if (servico.getFechamentoDiario().getStatus() == StatusFechamento.FECHADO) {
+            throw new BusinessException("Caixa já fechado; não é possível cancelar o serviço");
+        }
+
         // Verificar se é o dono do serviço ou DONO do sistema
         Usuario usuario = buscarUsuario(emailUsuario);
         if (!servico.getUsuario().getId().equals(usuario.getId())
