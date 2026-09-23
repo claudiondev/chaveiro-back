@@ -1,5 +1,6 @@
 package com.chaveiro_abencoado.back.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -7,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -25,6 +27,25 @@ public class GlobalExceptionHandler {
                 .orElse("Erro de validação");
 
         return buildResponse(mensagem, HttpStatus.BAD_REQUEST);
+    }
+
+    // Parâmetros de query/path inválidos (ex: page=-1, size=100)
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<Map<String, Object>> tratarParametroInvalido(ConstraintViolationException ex) {
+        String mensagem = ex.getConstraintViolations().stream()
+                .map(v -> {
+                    String caminho = v.getPropertyPath().toString();
+                    return caminho.substring(caminho.lastIndexOf('.') + 1) + ": " + v.getMessage();
+                })
+                .findFirst()
+                .orElse("Parâmetro inválido");
+
+        return buildResponse(mensagem, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> tratarTipoInvalido(MethodArgumentTypeMismatchException ex) {
+        return buildResponse(ex.getName() + ": valor inválido", HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(NotFoundException.class)
