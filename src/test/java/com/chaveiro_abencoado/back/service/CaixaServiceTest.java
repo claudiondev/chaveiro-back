@@ -5,9 +5,11 @@ import com.chaveiro_abencoado.back.dto.FechamentoResponse;
 import com.chaveiro_abencoado.back.dto.ServicoResumoDTO;
 import com.chaveiro_abencoado.back.model.CategoriaServico;
 import com.chaveiro_abencoado.back.model.FechamentoDiario;
+import com.chaveiro_abencoado.back.model.MovimentacaoCaixa;
 import com.chaveiro_abencoado.back.model.ServicoRealizado;
 import com.chaveiro_abencoado.back.model.TipoServico;
 import com.chaveiro_abencoado.back.model.StatusFechamento;
+import com.chaveiro_abencoado.back.model.TipoMovimentacao;
 import com.chaveiro_abencoado.back.model.UserRole;
 import com.chaveiro_abencoado.back.model.Usuario;
 import com.chaveiro_abencoado.back.repository.FechamentoDiarioRepository;
@@ -207,6 +209,27 @@ class CaixaServiceTest {
         verify(fechamentoRepository).save(fechamento);
     }
 
+    @Test
+    void deveCalcularSaldoComEntradasESaidas() {
+        FechamentoDiario fechamento = new FechamentoDiario(
+                LocalDate.now(), new BigDecimal("100.00"), usuario);
+        fechamento.setId(1L);
+
+        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+                .thenReturn(Optional.of(fechamento));
+        when(movimentacaoRepository.findByFechamentoDiarioId(1L)).thenReturn(List.of(
+                movimentacao(TipoMovimentacao.ENTRADA, "200.00"),
+                movimentacao(TipoMovimentacao.SAIDA, "30.00")
+        ));
+        when(servicoRepository.findByFechamentoDiarioId(1L)).thenReturn(Collections.emptyList());
+
+        FechamentoResponse resultado = caixaService.consultarHoje();
+
+        assertEquals(new BigDecimal("200.00"), resultado.getTotalEntradas());
+        assertEquals(new BigDecimal("30.00"), resultado.getTotalSaidas());
+        assertEquals(new BigDecimal("270.00"), resultado.getSaldoFinal());
+    }
+
     private FechamentoDiario fechado(LocalDate data) {
         FechamentoDiario fechamento = new FechamentoDiario(data, new BigDecimal("100.00"), usuario);
         fechamento.setId(8L);
@@ -225,5 +248,12 @@ class CaixaServiceTest {
         s.setQuantidade(quantidade);
         s.setValorTotal(new BigDecimal(valorTotal));
         return s;
+    }
+
+    private MovimentacaoCaixa movimentacao(TipoMovimentacao tipo, String valor) {
+        MovimentacaoCaixa movimentacao = new MovimentacaoCaixa();
+        movimentacao.setTipo(tipo);
+        movimentacao.setValor(new BigDecimal(valor));
+        return movimentacao;
     }
 }

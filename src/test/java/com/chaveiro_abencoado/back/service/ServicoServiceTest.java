@@ -102,6 +102,48 @@ class ServicoServiceTest {
     }
 
     @Test
+    void pagamentoPendenteSoDeveGerarEntradaQuandoForPago() {
+        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+                .thenReturn(Optional.of(caixa));
+        when(usuarioRepository.findByEmail("func@email.com")).thenReturn(Optional.of(usuario));
+        when(tipoServicoService.buscarPorId(1L)).thenReturn(tipoServico);
+        when(servicoRepository.save(any(ServicoRealizado.class))).thenAnswer(invocation -> {
+            ServicoRealizado s = invocation.getArgument(0);
+            s.setId(4L);
+            return s;
+        });
+
+        ServicoRequest request = criarRequest(1L, 1, FormaPagamento.PIX, false, false);
+        request.setStatusPagamento(StatusPagamento.PENDENTE);
+
+        ServicoDTO registrado = servicoService.registrar(request, "func@email.com");
+
+        assertEquals(StatusPagamento.PENDENTE, registrado.getStatusPagamento());
+        verify(movimentacaoRepository, never()).save(any(MovimentacaoCaixa.class));
+
+        ServicoRealizado pendente = new ServicoRealizado();
+        pendente.setId(4L);
+        pendente.setTipoServico(tipoServico);
+        pendente.setUsuario(usuario);
+        pendente.setFechamentoDiario(caixa);
+        pendente.setQuantidade(1);
+        pendente.setValorUnitario(new BigDecimal("15.00"));
+        pendente.setValorTotal(new BigDecimal("15.00"));
+        pendente.setFormaPagamento(FormaPagamento.PIX);
+        pendente.setStatusPagamento(StatusPagamento.PENDENTE);
+        pendente.setDataHora(LocalDateTime.now());
+        when(servicoRepository.findById(4L)).thenReturn(Optional.of(pendente));
+
+        ServicoDTO pago = servicoService.marcarComoPago(4L, "func@email.com");
+
+        assertEquals(StatusPagamento.PAGO, pago.getStatusPagamento());
+        verify(movimentacaoRepository).save(argThat(m ->
+                m.getValor().compareTo(new BigDecimal("15.00")) == 0
+                        && m.getFormaPagamento() == FormaPagamento.PIX
+                        && m.getFechamentoDiario().getId().equals(caixa.getId())));
+    }
+
+    @Test
     void domicilioDeveUsarPrecoExternoQuandoDisponivel() {
         tipoServico.setPrecoExterno(new BigDecimal("25.00"));
 
@@ -163,6 +205,29 @@ class ServicoServiceTest {
         assertEquals("Caixa já fechado; não é possível cancelar o serviço", ex.getMessage());
         verify(movimentacaoRepository, never()).deleteByDescricaoStartingWithAndFechamentoDiarioId(any(), any());
         verify(servicoRepository, never()).delete(any());
+    }
+
+    @Test
+    void donoDeveCancelarServicoEEntradaAssociada() {
+        Usuario dono = new Usuario("Dono", "dono@email.com", "hash", UserRole.DONO);
+        dono.setId(2L);
+
+        ServicoRealizado servico = new ServicoRealizado();
+        servico.setId(7L);
+        servico.setDataHora(LocalDateTime.now());
+        servico.setFechamentoDiario(caixa);
+        servico.setUsuario(usuario);
+        servico.setTipoServico(tipoServico);
+        servico.setGarantia(false);
+
+        when(servicoRepository.findById(7L)).thenReturn(Optional.of(servico));
+        when(usuarioRepository.findByEmail("dono@email.com")).thenReturn(Optional.of(dono));
+
+        servicoService.cancelar(7L, "dono@email.com");
+
+        verify(movimentacaoRepository).deleteByDescricaoStartingWithAndFechamentoDiarioId(
+                "Serviço #7:", caixa.getId());
+        verify(servicoRepository).delete(servico);
     }
 
     private ServicoRequest criarRequest(Long tipoId, int qtd, FormaPagamento forma,
