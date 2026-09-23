@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import org.mockito.ArgumentCaptor;
 
 @ExtendWith(MockitoExtension.class)
@@ -51,6 +52,8 @@ class CaixaServiceTest {
     private CaixaService caixaService;
 
     private Usuario usuario;
+    private final TipoServico copia = new TipoServico("Cópia simples", new BigDecimal("10.00"), CategoriaServico.CHAVE, true);
+    private final TipoServico fechadura = new TipoServico("Troca de fechadura", new BigDecimal("80.00"), CategoriaServico.FECHADURA, false);
 
     @BeforeEach
     void setUp() {
@@ -100,10 +103,7 @@ class CaixaServiceTest {
         when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
                 .thenReturn(Optional.of(fechamento));
         when(movimentacaoRepository.findByFechamentoDiarioId(1L)).thenReturn(Collections.emptyList());
-        when(servicoRepository.findByDataHoraBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(Collections.emptyList());
-        when(servicoRepository.contarChavesNoPeriodo(any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(0);
+        when(servicoRepository.findByFechamentoDiarioId(1L)).thenReturn(Collections.emptyList());
         when(fechamentoRepository.save(any(FechamentoDiario.class))).thenReturn(fechamento);
 
         FechamentoResponse response = caixaService.fecharCaixa("Dia tranquilo");
@@ -151,30 +151,72 @@ class CaixaServiceTest {
     @Test
     void deveDetalharServicosPorTipoNoComprovante() {
         LocalDate data = LocalDate.of(2026, 9, 22);
-        FechamentoDiario fechamento = new FechamentoDiario(data, new BigDecimal("100.00"), usuario);
-        fechamento.setId(8L);
-        fechamento.setStatus(StatusFechamento.FECHADO);
-
-        TipoServico copia = new TipoServico("Cópia simples", new BigDecimal("10.00"), CategoriaServico.CHAVE, true);
-        TipoServico fechadura = new TipoServico("Troca de fechadura", new BigDecimal("80.00"), CategoriaServico.FECHADURA, false);
+        FechamentoDiario fechamento = fechado(data);
 
         when(fechamentoRepository.findTopByDataOrderByIdDesc(data)).thenReturn(Optional.of(fechamento));
-        when(movimentacaoRepository.findByFechamentoDiarioId(8L)).thenReturn(Collections.emptyList());
-        when(servicoRepository.findByDataHoraBetween(any(), any())).thenReturn(List.of(
+        when(servicoRepository.findByFechamentoDiarioId(8L)).thenReturn(List.of(
                 servico(copia, 2, "20.00"),
                 servico(fechadura, 1, "80.00"),
                 servico(copia, 3, "30.00")
         ));
-        when(servicoRepository.contarChavesNoPeriodo(any(), any())).thenReturn(5);
 
         FechamentoResponse resultado = caixaService.consultarPorData(data);
 
-        assertEquals(3, resultado.getTotalServicos());
-        assertEquals(5, resultado.getTotalChaves());
         assertEquals(List.of(
                 new ServicoResumoDTO("Troca de fechadura", 1, new BigDecimal("80.00")),
                 new ServicoResumoDTO("Cópia simples", 5, new BigDecimal("50.00"))
         ), resultado.getServicos());
+    }
+
+    @Test
+    void naoDeveRecalcularCaixaFechado() {
+        LocalDate data = LocalDate.of(2026, 9, 22);
+        FechamentoDiario fechamento = fechado(data);
+
+        when(fechamentoRepository.findTopByDataOrderByIdDesc(data)).thenReturn(Optional.of(fechamento));
+        // Serviço extra no banco não pode alterar o que foi fechado
+        when(servicoRepository.findByFechamentoDiarioId(8L)).thenReturn(List.of(servico(fechadura, 1, "80.00")));
+
+        FechamentoResponse resultado = caixaService.consultarPorData(data);
+
+        assertEquals(new BigDecimal("280.00"), resultado.getSaldoFinal());
+        assertEquals(6, resultado.getTotalServicos());
+        assertEquals(4, resultado.getTotalChaves());
+        verify(movimentacaoRepository, never()).findByFechamentoDiarioId(any());
+        verify(fechamentoRepository, never()).save(any());
+    }
+
+    @Test
+    void deveContarServicosPeloCaixaQuandoAberto() {
+        FechamentoDiario fechamento = new FechamentoDiario(LocalDate.now(), new BigDecimal("100.00"), usuario);
+        fechamento.setId(1L);
+
+        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+                .thenReturn(Optional.of(fechamento));
+        when(movimentacaoRepository.findByFechamentoDiarioId(1L)).thenReturn(Collections.emptyList());
+        when(servicoRepository.findByFechamentoDiarioId(1L)).thenReturn(List.of(
+                servico(copia, 2, "20.00"),
+                servico(fechadura, 1, "80.00")
+        ));
+
+        FechamentoResponse resultado = caixaService.consultarHoje();
+
+        assertEquals(2, resultado.getTotalServicos());
+        assertEquals(2, resultado.getTotalChaves());
+        verify(servicoRepository, never()).findByDataHoraBetween(any(), any());
+        verify(fechamentoRepository).save(fechamento);
+    }
+
+    private FechamentoDiario fechado(LocalDate data) {
+        FechamentoDiario fechamento = new FechamentoDiario(data, new BigDecimal("100.00"), usuario);
+        fechamento.setId(8L);
+        fechamento.setStatus(StatusFechamento.FECHADO);
+        fechamento.setTotalEntradas(new BigDecimal("200.00"));
+        fechamento.setTotalSaidas(new BigDecimal("20.00"));
+        fechamento.setSaldoFinal(new BigDecimal("280.00"));
+        fechamento.setTotalServicos(6);
+        fechamento.setTotalChaves(4);
+        return fechamento;
     }
 
     private ServicoRealizado servico(TipoServico tipo, int quantidade, String valorTotal) {

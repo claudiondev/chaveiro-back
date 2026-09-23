@@ -19,7 +19,6 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,12 +62,7 @@ public class CaixaService {
                 .orElseGet(() -> fechamentoRepository.findTopByDataOrderByIdDesc(LocalDate.now())
                         .orElseThrow(() -> new NotFoundException("Caixa não foi aberto hoje")));
 
-        List<ServicoRealizado> servicos = atualizarTotais(fechamento);
-        fechamentoRepository.save(fechamento);
-
-        FechamentoResponse response = FechamentoResponse.fromEntity(fechamento);
-        response.setServicos(resumirPorTipo(servicos));
-        return response;
+        return montarComprovante(fechamento);
     }
 
     // Histórico: consultar caixa de qualquer data
@@ -77,8 +71,17 @@ public class CaixaService {
         FechamentoDiario fechamento = fechamentoRepository.findTopByDataOrderByIdDesc(data)
                 .orElseThrow(() -> new NotFoundException("Nenhum caixa encontrado para " + data));
 
-        List<ServicoRealizado> servicos = atualizarTotais(fechamento, data);
-        fechamentoRepository.save(fechamento);
+        return montarComprovante(fechamento);
+    }
+
+    // Caixa fechado é congelado: os totais gravados no fechamento não são recalculados
+    private FechamentoResponse montarComprovante(FechamentoDiario fechamento) {
+        List<ServicoRealizado> servicos = servicoRepository.findByFechamentoDiarioId(fechamento.getId());
+
+        if (fechamento.getStatus() == StatusFechamento.ABERTO) {
+            atualizarTotais(fechamento, servicos);
+            fechamentoRepository.save(fechamento);
+        }
 
         FechamentoResponse response = FechamentoResponse.fromEntity(fechamento);
         response.setServicos(resumirPorTipo(servicos));
@@ -121,7 +124,7 @@ public class CaixaService {
                 .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
                 .orElseThrow(() -> new BusinessException("Nenhum caixa aberto para fechar"));
 
-        atualizarTotais(fechamento);
+        atualizarTotais(fechamento, servicoRepository.findByFechamentoDiarioId(fechamento.getId()));
         fechamento.setStatus(StatusFechamento.FECHADO);
         fechamento.setObservacao(observacao);
         fechamentoRepository.save(fechamento);
@@ -129,11 +132,8 @@ public class CaixaService {
         return FechamentoResponse.fromEntity(fechamento);
     }
 
-    private List<ServicoRealizado> atualizarTotais(FechamentoDiario fechamento) {
-        return atualizarTotais(fechamento, LocalDate.now());
-    }
-
-    private List<ServicoRealizado> atualizarTotais(FechamentoDiario fechamento, LocalDate data) {
+    // Serviços vêm pelo vínculo com o caixa, não pelo horário de registro
+    private void atualizarTotais(FechamentoDiario fechamento, List<ServicoRealizado> servicos) {
         List<MovimentacaoCaixa> movimentacoes = movimentacaoRepository
                 .findByFechamentoDiarioId(fechamento.getId());
 
@@ -147,19 +147,16 @@ public class CaixaService {
                 .map(MovimentacaoCaixa::getValor)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        LocalDateTime inicioDia = data.atStartOfDay();
-        LocalDateTime fimDia = data.atTime(LocalTime.MAX);
-
-        List<ServicoRealizado> servicos = servicoRepository.findByDataHoraBetween(inicioDia, fimDia);
-        int totalServicos = servicos.size();
-        int totalChaves = servicoRepository.contarChavesNoPeriodo(inicioDia, fimDia);
+        int totalChaves = servicos.stream()
+                .filter(s -> s.getTipoServico().isEhChave())
+                .mapToInt(ServicoRealizado::getQuantidade)
+                .sum();
 
         fechamento.setTotalEntradas(entradas);
         fechamento.setTotalSaidas(saidas);
         fechamento.setSaldoFinal(fechamento.getValorAbertura().add(entradas).subtract(saidas));
-        fechamento.setTotalServicos(totalServicos);
+        fechamento.setTotalServicos(servicos.size());
         fechamento.setTotalChaves(totalChaves);
-        return servicos;
     }
 
     // Agrupa por nome do tipo, ordenado do maior valor pro menor
