@@ -2,8 +2,11 @@ package com.chaveiro_abencoado.back.controller;
 
 import com.chaveiro_abencoado.back.dto.RelatorioResponse;
 import com.chaveiro_abencoado.back.service.RelatorioService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -13,6 +16,7 @@ import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
+@Validated
 @RequestMapping("/api/relatorios")
 public class RelatorioController {
 
@@ -29,13 +33,16 @@ public class RelatorioController {
         return ResponseEntity.ok(relatorioService.relatorioDiario(filtro));
     }
 
+    // inicio: qualquer dia da semana desejada (padrão: semana atual)
     @GetMapping("/semanal")
-    public ResponseEntity<RelatorioResponse> semanal() {
-        return ResponseEntity.ok(relatorioService.relatorioSemanal());
+    public ResponseEntity<RelatorioResponse> semanal(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio) {
+        return ResponseEntity.ok(relatorioService.relatorioSemanal(inicio != null ? inicio : LocalDate.now()));
     }
 
     @GetMapping("/mensal")
-    public ResponseEntity<RelatorioResponse> mensal(@RequestParam int mes, @RequestParam int ano) {
+    public ResponseEntity<RelatorioResponse> mensal(@RequestParam @Min(1) @Max(12) int mes,
+                                                    @RequestParam @Min(2000) @Max(2100) int ano) {
         return ResponseEntity.ok(relatorioService.relatorioMensal(mes, ano));
     }
 

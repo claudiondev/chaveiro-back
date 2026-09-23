@@ -19,10 +19,7 @@ import org.springframework.data.domain.PageRequest;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class CaixaService {
@@ -84,7 +81,7 @@ public class CaixaService {
         }
 
         FechamentoResponse response = FechamentoResponse.fromEntity(fechamento);
-        response.setServicos(resumirPorTipo(servicos));
+        response.setServicos(ServicoResumoDTO.agruparPorTipo(servicos));
         return response;
     }
 
@@ -157,23 +154,6 @@ public class CaixaService {
         fechamento.setSaldoFinal(fechamento.getValorAbertura().add(entradas).subtract(saidas));
         fechamento.setTotalServicos(servicos.size());
         fechamento.setTotalChaves(totalChaves);
-    }
-
-    // Agrupa por nome do tipo, ordenado do maior valor pro menor
-    private List<ServicoResumoDTO> resumirPorTipo(List<ServicoRealizado> servicos) {
-        Map<String, ServicoResumoDTO> porNome = new LinkedHashMap<>();
-        for (ServicoRealizado s : servicos) {
-            porNome.merge(
-                    s.getTipoServico().getNome(),
-                    new ServicoResumoDTO(s.getTipoServico().getNome(), s.getQuantidade(), s.getValorTotal()),
-                    (a, b) -> new ServicoResumoDTO(a.nome(), a.quantidade() + b.quantidade(),
-                            a.valorTotal().add(b.valorTotal()))
-            );
-        }
-        return porNome.values().stream()
-                .sorted(Comparator.comparing(ServicoResumoDTO::valorTotal).reversed()
-                        .thenComparing(ServicoResumoDTO::nome))
-                .toList();
     }
 
     private Usuario buscarUsuario(String email) {

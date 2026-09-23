@@ -1,6 +1,9 @@
 package com.chaveiro_abencoado.back.service;
 
+import com.chaveiro_abencoado.back.dto.DiaResumoDTO;
+import com.chaveiro_abencoado.back.dto.FuncionarioResumoDTO;
 import com.chaveiro_abencoado.back.dto.RelatorioResponse;
+import com.chaveiro_abencoado.back.dto.ServicoResumoDTO;
 import com.chaveiro_abencoado.back.model.*;
 import com.chaveiro_abencoado.back.repository.FechamentoDiarioRepository;
 import com.chaveiro_abencoado.back.repository.MovimentacaoCaixaRepository;
@@ -131,6 +134,69 @@ class RelatorioServiceTest {
         assertEquals(0, r.getTotalServicos());
         assertTrue(r.getEntradasPorFormaPagamento().isEmpty());
         verify(servicoRepository, never()).findByFechamentoDiarioIdIn(any());
+    }
+
+    @Test
+    void deveResumirPorTipoEFuncionarioComComissao() {
+        joao.setPercentualComissao(new BigDecimal("10"));
+        Usuario maria = new Usuario("Maria", "maria@email.com", "hash", UserRole.FUNCIONARIO);
+        maria.setId(3L);
+
+        ServicoRealizado garantia = servico(copia, 1, "0.00", FormaPagamento.PIX);
+        garantia.setGarantia(true);
+        ServicoRealizado fiado = servico(carimbo, 1, "45.00", FormaPagamento.PIX);
+        fiado.setStatusPagamento(StatusPagamento.PENDENTE);
+        ServicoRealizado daMaria = servico(carimbo, 2, "90.00", FormaPagamento.DINHEIRO);
+        daMaria.setUsuario(maria);
+
+        comCaixas(caixa);
+        comServicos(servico(copia, 3, "30.00", FormaPagamento.PIX), garantia, fiado, daMaria);
+        comMovimentacoes();
+
+        RelatorioResponse r = relatorioService.relatorioDiario(dia);
+
+        assertEquals(new BigDecimal("45.00"), r.getTotalPendente());
+        assertEquals(1, r.getTotalGarantias());
+        assertEquals(List.of(
+                new ServicoResumoDTO("Carimbo", 3, new BigDecimal("135.00")),
+                new ServicoResumoDTO("Cópia simples", 4, new BigDecimal("30.00"))
+        ), r.getServicosPorTipo());
+
+        // Maria faturou mais e vem primeiro; sem percentual, comissão zero
+        FuncionarioResumoDTO primeira = r.getPorFuncionario().get(0);
+        assertEquals("Maria", primeira.nome());
+        assertEquals(0, BigDecimal.ZERO.compareTo(primeira.comissao()));
+        assertNull(primeira.percentualComissao());
+
+        // João: garantia conta como serviço e chave, mas não entra no faturamento
+        FuncionarioResumoDTO joaoResumo = r.getPorFuncionario().get(1);
+        assertEquals(3, joaoResumo.servicos());
+        assertEquals(4, joaoResumo.chaves());
+        assertEquals(new BigDecimal("75.00"), joaoResumo.faturamento());
+        assertEquals(new BigDecimal("7.50"), joaoResumo.comissao());
+    }
+
+    @Test
+    void semanalDeveIrDeSegundaADomingoComTodosOsDias() {
+        // 22/09/2026 é terça; a semana começa na segunda 21/09
+        FechamentoDiario sexta = new FechamentoDiario(LocalDate.of(2026, 9, 25), new BigDecimal("50.00"), joao);
+        sexta.setId(2L);
+        comCaixas(caixa, sexta);
+        ServicoRealizado naSexta = servico(copia, 1, "10.00", FormaPagamento.PIX);
+        naSexta.setFechamentoDiario(sexta);
+        comServicos(servico(copia, 1, "10.00", FormaPagamento.PIX), naSexta);
+        MovimentacaoCaixa saidaSexta = saida("7.00", CategoriaSaida.TAXAS);
+        saidaSexta.setFechamentoDiario(sexta);
+        comMovimentacoes(entrada("10.00", FormaPagamento.PIX), saidaSexta);
+
+        RelatorioResponse r = relatorioService.relatorioSemanal(dia);
+
+        assertEquals(LocalDate.of(2026, 9, 21), r.getDataInicio());
+        assertEquals(LocalDate.of(2026, 9, 27), r.getDataFim());
+        assertEquals(7, r.getPorDia().size());
+        assertEquals(new DiaResumoDTO(LocalDate.of(2026, 9, 21), BigDecimal.ZERO, BigDecimal.ZERO, 0), r.getPorDia().get(0));
+        assertEquals(new DiaResumoDTO(dia, new BigDecimal("10.00"), BigDecimal.ZERO, 1), r.getPorDia().get(1));
+        assertEquals(new DiaResumoDTO(LocalDate.of(2026, 9, 25), BigDecimal.ZERO, new BigDecimal("7.00"), 1), r.getPorDia().get(4));
     }
 
     private void comCaixas(FechamentoDiario... caixas) {
