@@ -52,9 +52,13 @@
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+		<!-- No Spring Boot 4.x a autoconfiguração do Flyway virou módulo próprio; sem este
+		     starter, FlywayAutoConfiguration não entra no classpath e as migrations nunca
+		     rodam (nem em prod) — o bug ficava mascarado em dev porque ddl-auto=update deixa
+		     o Hibernate criar o schema sozinho. flyway-core vem transitivamente por aqui. -->
 		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-core</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
@@ -117,6 +121,19 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+			<!-- *IT.java: testes de integração com PostgreSQL real, só em `mvn verify` (nao no `mvn test`) -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

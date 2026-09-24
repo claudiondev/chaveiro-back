@@ -8,14 +8,18 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+// Sobe o contexto e deixa o Hibernate criar o schema no H2 (ddl-auto=create-drop, Flyway
+// desabilitado no profile "test"). Isso confirma que as entidades JPA são consistentes entre si,
+// mas NÃO valida as migrations do Flyway nem o schema real do PostgreSQL — isso é feito pelos
+// testes @Tag("postgres-it") em PostgresMigrationIT, que rodam contra um PostgreSQL de verdade.
 @SpringBootTest
 @ActiveProfiles("test")
-class BackApplicationTests {
+class HibernateSchemaH2Test {
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
 
 	@Test
-	void deveCriarSchemaCompleto() {
+	void hibernateDeveCriarEntidadesConsistentesNoH2() {
 		Integer tabelaFechamentos = jdbcTemplate.queryForObject("""
 				SELECT COUNT(*)
 				FROM INFORMATION_SCHEMA.TABLES
