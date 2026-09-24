@@ -6,6 +6,7 @@ import com.chaveiro_abencoado.back.exception.BusinessException;
 import com.chaveiro_abencoado.back.exception.NotFoundException;
 import com.chaveiro_abencoado.back.exception.UnauthorizedException;
 import com.chaveiro_abencoado.back.model.*;
+import com.chaveiro_abencoado.back.validation.LimitesFinanceiros;
 import com.chaveiro_abencoado.back.repository.FechamentoDiarioRepository;
 import com.chaveiro_abencoado.back.repository.MovimentacaoCaixaRepository;
 import com.chaveiro_abencoado.back.repository.ServicoRealizadoRepository;
@@ -42,6 +43,7 @@ public class ServicoService {
 
     @Transactional
     public ServicoDTO registrar(ServicoRequest request, String emailUsuario) {
+        validarRequest(request);
         FechamentoDiario caixaAberto = buscarCaixaAberto();
         Usuario usuario = buscarUsuario(emailUsuario);
         TipoServico tipoServico = tipoServicoService.buscarPorId(request.getTipoServicoId());
@@ -125,6 +127,23 @@ public class ServicoService {
         servicoRepository.delete(servico);
     }
 
+    // Regras que dependem de mais de um campo — Bean Validation cobre só campos isolados
+    private void validarRequest(ServicoRequest request) {
+        if (request.isDomicilio() && (request.getEndereco() == null || request.getEndereco().isBlank())) {
+            throw new BusinessException("Endereço é obrigatório em atendimento a domicílio");
+        }
+
+        boolean temTaxa = request.getTaxaDeslocamento() != null
+                && request.getTaxaDeslocamento().compareTo(BigDecimal.ZERO) != 0;
+        if (!request.isDomicilio() && temTaxa) {
+            throw new BusinessException("Taxa de deslocamento só se aplica a atendimento a domicílio");
+        }
+
+        if (request.isGarantia() && request.getStatusPagamento() == StatusPagamento.PENDENTE) {
+            throw new BusinessException("Garantia não gera cobrança; não pode ficar com pagamento pendente");
+        }
+    }
+
     private FechamentoDiario buscarCaixaAberto() {
         return fechamentoRepository
                 .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
@@ -160,7 +179,13 @@ public class ServicoService {
         } else {
             BigDecimal subtotal = precoUnitario.multiply(BigDecimal.valueOf(request.getQuantidade()));
             BigDecimal taxa = request.getTaxaDeslocamento() != null ? request.getTaxaDeslocamento() : BigDecimal.ZERO;
-            servico.setValorTotal(subtotal.add(taxa));
+            BigDecimal total = subtotal.add(taxa);
+
+            // Defesa final: preço do tipo de serviço não passa pelos mesmos limites do request
+            if (total.compareTo(LimitesFinanceiros.VALOR_MAXIMO) > 0) {
+                throw new BusinessException("Valor total do serviço excede o limite permitido");
+            }
+            servico.setValorTotal(total);
         }
 
         return servico;

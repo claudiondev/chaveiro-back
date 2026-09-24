@@ -159,6 +159,7 @@ class ServicoServiceTest {
 
         ServicoRequest request = criarRequest(1L, 1, FormaPagamento.PIX, true, false);
         request.setTaxaDeslocamento(new BigDecimal("30.00"));
+        request.setEndereco("Rua das Chaves, 123");
 
         ServicoDTO dto = servicoService.registrar(request, "func@email.com");
 
@@ -228,6 +229,53 @@ class ServicoServiceTest {
         verify(movimentacaoRepository).deleteByDescricaoStartingWithAndFechamentoDiarioId(
                 "Serviço #7:", caixa.getId());
         verify(servicoRepository).delete(servico);
+    }
+
+    @Test
+    void deveRejeitarDomicilioSemEndereco() {
+        ServicoRequest request = criarRequest(1L, 1, FormaPagamento.PIX, true, false);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> servicoService.registrar(request, "func@email.com"));
+        assertEquals("Endereço é obrigatório em atendimento a domicílio", ex.getMessage());
+        verify(fechamentoRepository, never()).findByDataAndStatus(any(), any());
+    }
+
+    @Test
+    void deveRejeitarTaxaDeDeslocamentoSemDomicilio() {
+        ServicoRequest request = criarRequest(1L, 1, FormaPagamento.PIX, false, false);
+        request.setTaxaDeslocamento(new BigDecimal("15.00"));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> servicoService.registrar(request, "func@email.com"));
+        assertEquals("Taxa de deslocamento só se aplica a atendimento a domicílio", ex.getMessage());
+    }
+
+    @Test
+    void deveRejeitarGarantiaComPagamentoPendente() {
+        ServicoRequest request = criarRequest(1L, 1, FormaPagamento.PIX, false, true);
+        request.setStatusPagamento(StatusPagamento.PENDENTE);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> servicoService.registrar(request, "func@email.com"));
+        assertEquals("Garantia não gera cobrança; não pode ficar com pagamento pendente", ex.getMessage());
+    }
+
+    @Test
+    void deveRejeitarValorTotalAcimaDoLimite() {
+        tipoServico.setPreco(new BigDecimal("99999999.99"));
+
+        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+                .thenReturn(Optional.of(caixa));
+        when(usuarioRepository.findByEmail("func@email.com")).thenReturn(Optional.of(usuario));
+        when(tipoServicoService.buscarPorId(1L)).thenReturn(tipoServico);
+
+        ServicoRequest request = criarRequest(1L, 2, FormaPagamento.PIX, false, false);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> servicoService.registrar(request, "func@email.com"));
+        assertEquals("Valor total do serviço excede o limite permitido", ex.getMessage());
+        verify(servicoRepository, never()).save(any());
     }
 
     private ServicoRequest criarRequest(Long tipoId, int qtd, FormaPagamento forma,
