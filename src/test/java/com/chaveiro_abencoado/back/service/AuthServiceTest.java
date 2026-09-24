@@ -155,6 +155,21 @@ class AuthServiceTest {
     }
 
     @Test
+    void alterarSenhaDeveIncrementarVersaoDeSessao() {
+        Usuario usuario = new Usuario("Teste", "teste@email.com",
+                passwordEncoder.encode("SenhaAtual1"), UserRole.DONO);
+        assertEquals(1, usuario.getVersaoSessao());
+
+        when(usuarioRepository.findByEmail("teste@email.com")).thenReturn(Optional.of(usuario));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        authService.alterarSenha("teste@email.com", "SenhaAtual1", "SenhaNova99");
+
+        assertEquals(2, usuario.getVersaoSessao(),
+                "trocar a senha deveria revogar tokens antigos incrementando a versao de sessao");
+    }
+
+    @Test
     void deveCadastrarFuncionario() {
         when(usuarioRepository.existsByEmail("novo@email.com")).thenReturn(false);
         when(usuarioRepository.save(any(Usuario.class))).thenAnswer(invocation -> {

@@ -16,7 +16,7 @@ class JwtServiceTest {
 
     @Test
     void deveGerarTokenValido() {
-        String token = jwtService.gerarToken("teste@email.com", "DONO");
+        String token = jwtService.gerarToken("teste@email.com", "DONO", 1);
 
         assertNotNull(token);
         assertTrue(jwtService.isTokenValido(token));
@@ -24,23 +24,30 @@ class JwtServiceTest {
 
     @Test
     void deveExtrairEmailDoToken() {
-        String token = jwtService.gerarToken("teste@email.com", "DONO");
+        String token = jwtService.gerarToken("teste@email.com", "DONO", 1);
 
         assertEquals("teste@email.com", jwtService.extrairEmail(token));
     }
 
     @Test
     void deveExtrairRoleDoToken() {
-        String token = jwtService.gerarToken("teste@email.com", "FUNCIONARIO");
+        String token = jwtService.gerarToken("teste@email.com", "FUNCIONARIO", 1);
 
         assertEquals("FUNCIONARIO", jwtService.extrairRole(token));
+    }
+
+    @Test
+    void deveExtrairVersaoSessaoDoToken() {
+        String token = jwtService.gerarToken("teste@email.com", "DONO", 3);
+
+        assertEquals(3, jwtService.extrairVersaoSessao(token));
     }
 
     @Test
     void tokenExpiradoDeveSerInvalido() {
         JwtService serviceComExpCurta = new JwtService(
                 "chave-secreta-teste-apenas-32-caracteres-minimo!!", -1000);
-        String token = serviceComExpCurta.gerarToken("teste@email.com", "DONO");
+        String token = serviceComExpCurta.gerarToken("teste@email.com", "DONO", 1);
 
         assertFalse(jwtService.isTokenValido(token));
     }

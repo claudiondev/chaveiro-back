@@ -67,7 +67,7 @@ public class AuthService {
         limitePorEmail.limpar(email);
         limitePorOrigem.limpar(origemRequisicao);
 
-        String token = jwtService.gerarToken(usuario.getEmail(), usuario.getRole().name());
+        String token = jwtService.gerarToken(usuario.getEmail(), usuario.getRole().name(), usuario.getVersaoSessao());
         return new TokenResponse(token, usuario.getRole().name(), usuario.getNome());
     }
 
@@ -90,7 +90,7 @@ public class AuthService {
 
         usuarioRepository.save(usuario);
 
-        String token = jwtService.gerarToken(usuario.getEmail(), usuario.getRole().name());
+        String token = jwtService.gerarToken(usuario.getEmail(), usuario.getRole().name(), usuario.getVersaoSessao());
         return new TokenResponse(token, usuario.getRole().name(), usuario.getNome());
     }
 
@@ -103,6 +103,9 @@ public class AuthService {
         }
 
         usuario.setSenha(passwordEncoder.encode(novaSenha));
+        // Revoga qualquer token emitido antes desta troca (Task 9): o filtro compara essa
+        // versão com o claim "v" do JWT a cada requisição.
+        usuario.setVersaoSessao(usuario.getVersaoSessao() + 1);
         usuarioRepository.save(usuario);
     }
 

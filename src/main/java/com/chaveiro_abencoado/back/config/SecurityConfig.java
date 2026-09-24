@@ -4,19 +4,27 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 @Configuration
 @EnableWebSecurity
@@ -37,6 +45,13 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            // 401: sem token, token inválido/expirado, ou sessão revogada (senha trocada).
+            // 403: autenticado, mas sem o role exigido. Sem isso, o comportamento padrão
+            // do Spring Security devolve 403 pros dois casos, e o front não consegue
+            // diferenciar "sua sessão caiu, faça login de novo" de "você não pode fazer isso".
+            .exceptionHandling(exceptions -> exceptions
+                    .authenticationEntryPoint(jsonErrorResponse(HttpStatus.UNAUTHORIZED, "Não autenticado"))
+                    .accessDeniedHandler(jsonAccessDeniedResponse()))
             .authorizeHttpRequests(auth -> auth
                 // Auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
@@ -75,6 +90,30 @@ public class SecurityConfig {
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    private AuthenticationEntryPoint jsonErrorResponse(HttpStatus status, String mensagemPadrao) {
+        return (request, response, authException) -> escreverErroJson(response, status, mensagemPadrao);
+    }
+
+    private AccessDeniedHandler jsonAccessDeniedResponse() {
+        return (request, response, accessDeniedException) ->
+                escreverErroJson(response, HttpStatus.FORBIDDEN, "Sem permissão para este recurso");
+    }
+
+    private void escreverErroJson(jakarta.servlet.http.HttpServletResponse response, HttpStatus status,
+                                  String mensagem) throws IOException {
+        response.setStatus(status.value());
+        // Sem isso, acentos saem corrompidos: response.getWriter() usa o charset da
+        // resposta, e sem setCharacterEncoding ele não é necessariamente UTF-8.
+        response.setCharacterEncoding("UTF-8");
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        Map<String, Object> corpo = Map.of(
+                "erro", mensagem,
+                "status", status.value(),
+                "timestamp", LocalDateTime.now().toString()
+        );
+        new ObjectMapper().writeValue(response.getWriter(), corpo);
     }
 
     @Bean

@@ -41,10 +41,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (jwtService.isTokenValido(token)) {
                 String email = jwtService.extrairEmail(token);
                 String role = jwtService.extrairRole(token);
+                int versaoSessaoNoToken = jwtService.extrairVersaoSessao(token);
 
-                // Verificar se o usuário ainda está ativo no banco
+                // Ativo no banco e a versão de sessão do token ainda é a vigente — trocar
+                // a senha incrementa essa versão e revoga qualquer token emitido antes,
+                // mesmo que não tenha expirado (Task 9).
                 Optional<Usuario> usuario = usuarioRepository.findByEmail(email);
-                if (usuario.isPresent() && usuario.get().isAtivo()) {
+                if (usuario.isPresent() && usuario.get().isAtivo()
+                        && usuario.get().getVersaoSessao() == versaoSessaoNoToken) {
                     var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
                     var authentication = new UsernamePasswordAuthenticationToken(email, null, authorities);
                     SecurityContextHolder.getContext().setAuthentication(authentication);

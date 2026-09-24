@@ -31,6 +31,12 @@ public class  Usuario {
     @Column(nullable = false)
     private boolean ativo = true;
 
+    // Incrementada a cada troca de senha; o JWT carrega a versão vigente no momento em
+    // que foi emitido. Se não bater com a versão atual do usuário, o token é tratado
+    // como revogado (JwtAuthenticationFilter), mesmo sem ter expirado.
+    @Column(name = "versao_sessao", nullable = false)
+    private int versaoSessao = 1;
+
     @Column(precision = 5, scale = 2)
     private BigDecimal percentualComissao;
 
@@ -98,6 +104,14 @@ public class  Usuario {
 
     public void setAtivo(boolean ativo) {
         this.ativo = ativo;
+    }
+
+    public int getVersaoSessao() {
+        return versaoSessao;
+    }
+
+    public void setVersaoSessao(int versaoSessao) {
+        this.versaoSessao = versaoSessao;
     }
 
     public BigDecimal getPercentualComissao() {
