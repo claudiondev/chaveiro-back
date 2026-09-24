@@ -13,9 +13,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class AuthService {
@@ -24,10 +21,17 @@ public class AuthService {
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
 
-    // Rate limiting: email -> {tentativas, timestamp do primeiro erro}
-    private final Map<String, long[]> tentativasLogin = new ConcurrentHashMap<>();
     private static final int MAX_TENTATIVAS = 5;
-    private static final long BLOQUEIO_MS = 15 * 60 * 1000; // 15 minutos
+    private static final long JANELA_MS = 15 * 60 * 1000; // 15 minutos
+    private static final int CAPACIDADE_MAXIMA_POR_LIMITADOR = 5000;
+
+    // Dois limitadores independentes: um ataque com muitos e-mails da mesma origem não
+    // esgota o limite de contas legítimas, e vice-versa. Cada um é limitado em tamanho
+    // (LRU) e nunca faz varredura completa — ver LoginRateLimiter.
+    private final LoginRateLimiter limitePorEmail =
+            new LoginRateLimiter(MAX_TENTATIVAS, JANELA_MS, CAPACIDADE_MAXIMA_POR_LIMITADOR);
+    private final LoginRateLimiter limitePorOrigem =
+            new LoginRateLimiter(MAX_TENTATIVAS, JANELA_MS, CAPACIDADE_MAXIMA_POR_LIMITADOR);
 
     public AuthService(UsuarioRepository usuarioRepository,
                        JwtService jwtService,
@@ -37,12 +41,16 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public TokenResponse login(LoginRequest request) {
-        verificarBloqueio(request.getEmail());
+    // origemRequisicao: endereço de origem já resolvido pelo controller a partir da
+    // conexão TCP (nunca de um cabeçalho enviado pelo cliente) — ver AuthController.
+    public TokenResponse login(LoginRequest request, String origemRequisicao) {
+        String email = request.getEmail();
+        limitePorEmail.verificarBloqueio(email);
+        limitePorOrigem.verificarBloqueio(origemRequisicao);
 
-        Usuario usuario = usuarioRepository.findByEmail(request.getEmail())
+        Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> {
-                    registrarTentativaFalha(request.getEmail());
+                    registrarTentativaFalha(email, origemRequisicao);
                     return new UnauthorizedException("Credenciais inválidas");
                 });
 
@@ -51,15 +59,21 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(request.getSenha(), usuario.getSenha())) {
-            registrarTentativaFalha(request.getEmail());
+            registrarTentativaFalha(email, origemRequisicao);
             throw new UnauthorizedException("Credenciais inválidas");
         }
 
-        // Login OK, limpa tentativas
-        tentativasLogin.remove(request.getEmail());
+        // Login OK, limpa tentativas dos dois limitadores
+        limitePorEmail.limpar(email);
+        limitePorOrigem.limpar(origemRequisicao);
 
         String token = jwtService.gerarToken(usuario.getEmail(), usuario.getRole().name());
         return new TokenResponse(token, usuario.getRole().name(), usuario.getNome());
+    }
+
+    private void registrarTentativaFalha(String email, String origemRequisicao) {
+        limitePorEmail.registrarFalha(email);
+        limitePorOrigem.registrarFalha(origemRequisicao);
     }
 
     public TokenResponse cadastrar(CadastroRequest request) {
@@ -103,32 +117,4 @@ public class AuthService {
         usuarioRepository.save(usuario);
     }
 
-    private void verificarBloqueio(String email) {
-        // Limpar entradas expiradas para evitar memory leak
-        long agora = System.currentTimeMillis();
-        tentativasLogin.entrySet().removeIf(entry -> {
-            long[] d = entry.getValue();
-            return d[0] >= MAX_TENTATIVAS && (agora - d[1]) >= BLOQUEIO_MS;
-        });
-
-        long[] dados = tentativasLogin.get(email);
-        if (dados != null && dados[0] >= MAX_TENTATIVAS) {
-            long tempoDecorrido = agora - dados[1];
-            if (tempoDecorrido < BLOQUEIO_MS) {
-                long minutosRestantes = (BLOQUEIO_MS - tempoDecorrido) / 60000 + 1;
-                throw new BusinessException("Muitas tentativas. Tente novamente em " + minutosRestantes + " minuto(s)");
-            }
-            tentativasLogin.remove(email);
-        }
-    }
-
-    private void registrarTentativaFalha(String email) {
-        tentativasLogin.compute(email, (k, dados) -> {
-            if (dados == null) {
-                return new long[]{1, System.currentTimeMillis()};
-            }
-            dados[0]++;
-            return dados;
-        });
-    }
 }

@@ -49,7 +49,7 @@ class AuthServiceTest {
         request.setEmail("teste@email.com");
         request.setSenha("Senha123");
 
-        TokenResponse response = authService.login(request);
+        TokenResponse response = authService.login(request, "127.0.0.1");
 
         assertNotNull(response.getToken());
         assertEquals("DONO", response.getRole());
@@ -67,7 +67,7 @@ class AuthServiceTest {
         request.setEmail("teste@email.com");
         request.setSenha("SenhaErrada1");
 
-        assertThrows(RuntimeException.class, () -> authService.login(request));
+        assertThrows(RuntimeException.class, () -> authService.login(request, "127.0.0.1"));
     }
 
     @Test
@@ -82,8 +82,76 @@ class AuthServiceTest {
         request.setEmail("teste@email.com");
         request.setSenha("Senha123");
 
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.login(request));
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> authService.login(request, "127.0.0.1"));
         assertEquals("Usuário desativado", ex.getMessage());
+    }
+
+    @Test
+    void deveBloquearAposCincoTentativasComOMesmoEmail() {
+        when(usuarioRepository.findByEmail("alvo@email.com")).thenReturn(Optional.empty());
+
+        LoginRequest request = new LoginRequest();
+        request.setEmail("alvo@email.com");
+        request.setSenha("qualquer");
+
+        for (int i = 0; i < 5; i++) {
+            String origem = "10.0.0." + i;
+            assertThrows(RuntimeException.class, () -> authService.login(request, origem));
+        }
+
+        com.chaveiro_abencoado.back.exception.RateLimitException ex = assertThrows(
+                com.chaveiro_abencoado.back.exception.RateLimitException.class,
+                () -> authService.login(request, "10.0.0.99"));
+        assertTrue(ex.getMessage().contains("Muitas tentativas"));
+    }
+
+    @Test
+    void deveBloquearPorOrigemMesmoComEmailsDiferentes() {
+        LoginRequest request = new LoginRequest();
+        request.setSenha("qualquer");
+
+        for (int i = 0; i < 5; i++) {
+            String email = "email" + i + "@email.com";
+            when(usuarioRepository.findByEmail(email)).thenReturn(Optional.empty());
+            request.setEmail(email);
+            String origem = "203.0.113.5";
+            assertThrows(RuntimeException.class, () -> authService.login(request, origem));
+        }
+
+        // Bloqueado pela origem antes mesmo de consultar o repositório por este e-mail novo
+        request.setEmail("email-novo-nunca-usado@email.com");
+        assertThrows(com.chaveiro_abencoado.back.exception.RateLimitException.class,
+                () -> authService.login(request, "203.0.113.5"));
+    }
+
+    @Test
+    void loginComSucessoLimpaTentativasAnteriores() {
+        Usuario usuario = new Usuario("Teste", "recupera@email.com",
+                passwordEncoder.encode("Senha123"), UserRole.DONO);
+        when(usuarioRepository.findByEmail("recupera@email.com")).thenReturn(Optional.of(usuario));
+
+        LoginRequest request = new LoginRequest();
+        request.setEmail("recupera@email.com");
+        request.setSenha("SenhaErrada");
+
+        for (int i = 0; i < 4; i++) {
+            String origem = "10.1.1." + i;
+            assertThrows(RuntimeException.class, () -> authService.login(request, origem));
+        }
+
+        request.setSenha("Senha123");
+        TokenResponse response = authService.login(request, "10.1.1.99");
+        assertNotNull(response.getToken());
+
+        // Depois do sucesso, o contador do e-mail volta a zero: mais 4 falhas não bloqueiam
+        request.setSenha("SenhaErrada");
+        for (int i = 0; i < 4; i++) {
+            String origem = "10.2.2." + i;
+            assertThrows(RuntimeException.class, () -> authService.login(request, origem));
+        }
+        request.setSenha("Senha123");
+        TokenResponse segundaVez = authService.login(request, "10.2.2.99");
+        assertNotNull(segundaVez.getToken());
     }
 
     @Test

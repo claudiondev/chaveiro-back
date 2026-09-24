@@ -6,6 +6,7 @@ import com.chaveiro_abencoado.back.dto.LoginRequest;
 import com.chaveiro_abencoado.back.dto.TokenResponse;
 import com.chaveiro_abencoado.back.model.Usuario;
 import com.chaveiro_abencoado.back.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,8 +27,12 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-        TokenResponse response = authService.login(request);
+    public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request,
+                                               HttpServletRequest httpRequest) {
+        // getRemoteAddr() é o endereço da conexão TCP que o servlet container viu — nunca
+        // um cabeçalho enviado pelo cliente (X-Forwarded-For não é lido aqui de propósito,
+        // porque seria fácil de forjar sem um proxy confiável configurado na frente).
+        TokenResponse response = authService.login(request, httpRequest.getRemoteAddr());
         return ResponseEntity.ok(response);
     }
 

@@ -69,6 +69,11 @@ public class GlobalExceptionHandler {
         return buildResponse(ex.getMessage(), HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(RateLimitException.class)
+    public ResponseEntity<Map<String, Object>> tratarRateLimit(RateLimitException ex) {
+        return buildResponse(ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> tratarRuntime(RuntimeException ex) {
         log.warn("RuntimeException não tratada: ", ex);
