@@ -3,6 +3,7 @@ package com.chaveiro_abencoado.back.service;
 import com.chaveiro_abencoado.back.dto.AberturaRequest;
 import com.chaveiro_abencoado.back.dto.FechamentoResponse;
 import com.chaveiro_abencoado.back.dto.ServicoResumoDTO;
+import com.chaveiro_abencoado.back.exception.BusinessException;
 import com.chaveiro_abencoado.back.model.CategoriaServico;
 import com.chaveiro_abencoado.back.model.FechamentoDiario;
 import com.chaveiro_abencoado.back.model.MovimentacaoCaixa;
@@ -92,6 +93,23 @@ class CaixaServiceTest {
         request.setValorAbertura(new BigDecimal("200.00"));
 
         RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> caixaService.abrirCaixa(request, "dono@email.com"));
+        assertEquals("Já existe um caixa para hoje", ex.getMessage());
+    }
+
+    @Test
+    void deveRejeitarCaixaDuplicadoQuandoConstraintDoBancoPegaARaceCondition() {
+        // Duas requisicoes passam pelo existsByData()==false ao mesmo tempo; a que grava
+        // por ultimo esbarra na constraint UNIQUE(data) do banco (V6), nao no metodo Java.
+        when(fechamentoRepository.existsByData(LocalDate.now())).thenReturn(false);
+        when(usuarioRepository.findByEmail("dono@email.com")).thenReturn(Optional.of(usuario));
+        when(fechamentoRepository.save(any(FechamentoDiario.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uk_fechamentos_diarios_data"));
+
+        AberturaRequest request = new AberturaRequest();
+        request.setValorAbertura(new BigDecimal("200.00"));
+
+        BusinessException ex = assertThrows(BusinessException.class,
                 () -> caixaService.abrirCaixa(request, "dono@email.com"));
         assertEquals("Já existe um caixa para hoje", ex.getMessage());
     }

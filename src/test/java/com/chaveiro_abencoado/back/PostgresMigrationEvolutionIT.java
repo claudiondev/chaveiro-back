@@ -25,9 +25,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PostgresMigrationEvolutionIT {
 
     private static final String BANCO = "chaveiro_it_evolve";
+    private static final int VERSAO_ANTIGA = 3;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private Flyway flyway;
 
     @BeforeAll
     static void prepararBancoComVersaoAntiga() throws SQLException {
@@ -35,30 +38,34 @@ class PostgresMigrationEvolutionIT {
 
         Flyway flywayAntigo = Flyway.configure()
                 .dataSource(PostgresItSupport.urlPara(BANCO), "postgres", "postgres")
-                .target("3")
+                .target(String.valueOf(VERSAO_ANTIGA))
                 .load();
         MigrateResult resultado = flywayAntigo.migrate();
 
-        assertEquals(3, resultado.migrationsExecuted, "pré-condição: banco deveria parar em V3 (antes da V4)");
+        assertEquals(VERSAO_ANTIGA, resultado.migrationsExecuted,
+                "pré-condição: banco deveria parar em V" + VERSAO_ANTIGA);
     }
 
     @Test
     void bancoExistenteEvoluiParaAUltimaVersaoSemQuebrar() {
         // O @SpringBootTest já rodou o Flyway do app inteiro ao subir o contexto: como o banco
-        // parou em V3, só a V4 deveria ter sido aplicada agora. Se o schema resultante não
-        // batesse com as entidades, ddl-auto=validate teria impedido o contexto de subir.
+        // parou em V3, o restante (V4 em diante) deveria ter sido aplicado agora. Se o schema
+        // resultante não batesse com as entidades, ddl-auto=validate teria impedido o contexto
+        // de subir. Contagem não é hardcoded: cresce conforme novas migrations são adicionadas.
+        int totalNoClasspath = flyway.info().all().length;
         Integer totalAplicadas = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
         Integer versaoMaisRecente = jdbcTemplate.queryForObject(
                 "SELECT MAX(version) FROM flyway_schema_history WHERE success = true", Integer.class);
 
-        assertEquals(4, totalAplicadas, "V1, V2, V3 (manuais) + V4 (pelo Spring) deveriam somar 4");
-        assertEquals(4, versaoMaisRecente);
+        assertEquals(totalNoClasspath, totalAplicadas,
+                "V1..V" + VERSAO_ANTIGA + " (manuais) + o restante (pelo Spring) deveriam somar todas");
+        assertEquals(totalNoClasspath, versaoMaisRecente);
     }
 
     @Test
     void dadosSemeadosAntesDaEvolucaoContinuamIntactos() {
         Integer tipos = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM tipos_servico", Integer.class);
-        assertTrue(tipos > 0, "seed da V2 deveria continuar presente após a evolução para V4");
+        assertTrue(tipos > 0, "seed da V2 deveria continuar presente após a evolução completa");
     }
 }

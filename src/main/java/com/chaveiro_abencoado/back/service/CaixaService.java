@@ -11,6 +11,7 @@ import com.chaveiro_abencoado.back.repository.FechamentoDiarioRepository;
 import com.chaveiro_abencoado.back.repository.MovimentacaoCaixaRepository;
 import com.chaveiro_abencoado.back.repository.ServicoRealizadoRepository;
 import com.chaveiro_abencoado.back.repository.UsuarioRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
@@ -47,7 +48,13 @@ public class CaixaService {
 
         Usuario usuario = buscarUsuario(emailUsuario);
         FechamentoDiario fechamento = new FechamentoDiario(LocalDate.now(), request.getValorAbertura(), usuario);
-        fechamentoRepository.save(fechamento);
+        try {
+            fechamentoRepository.save(fechamento);
+        } catch (DataIntegrityViolationException e) {
+            // Duas aberturas concorrentes passaram pelo existsByData() antes de qualquer
+            // uma gravar; a constraint UNIQUE(data) do banco pegou a que perdeu a corrida.
+            throw new BusinessException("Já existe um caixa para hoje");
+        }
 
         return FechamentoResponse.fromEntity(fechamento);
     }

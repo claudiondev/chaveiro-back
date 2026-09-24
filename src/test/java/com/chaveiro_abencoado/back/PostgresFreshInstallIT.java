@@ -3,6 +3,7 @@ package com.chaveiro_abencoado.back;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,6 +24,8 @@ class PostgresFreshInstallIT {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    @Autowired
+    private Flyway flyway;
 
     @BeforeAll
     static void recriarBancoVazio() throws SQLException {
@@ -32,13 +35,15 @@ class PostgresFreshInstallIT {
     @Test
     void migrationsCriamSchemaCompativelComAsEntidades() {
         // Se o Hibernate validasse com sucesso, o contexto já teria subido; aqui só confirmamos
-        // que o Flyway rodou as 4 migrations e nenhuma falhou.
+        // que o Flyway rodou TODAS as migrations do classpath (não conta hardcoded: cresce
+        // conforme novas migrations são adicionadas) e nenhuma falhou.
+        int totalNoClasspath = flyway.info().all().length;
         Integer totalAplicadas = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
         Integer totalFalhas = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false", Integer.class);
 
-        assertEquals(4, totalAplicadas, "esperava V1, V2, V3 e V4 aplicadas com sucesso");
+        assertEquals(totalNoClasspath, totalAplicadas, "esperava todas as migrations do classpath aplicadas");
         assertEquals(0, totalFalhas);
     }
 
