@@ -61,7 +61,7 @@ class ServicoServiceTest {
 
     @Test
     void deveRegistrarServico() {
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+        when(fechamentoRepository.findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO))
                 .thenReturn(Optional.of(caixa));
         when(usuarioRepository.findByEmail("func@email.com")).thenReturn(Optional.of(usuario));
         when(tipoServicoService.buscarPorId(1L)).thenReturn(tipoServico);
@@ -82,7 +82,7 @@ class ServicoServiceTest {
 
     @Test
     void garantiaNaoDeveGerarMovimentacao() {
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+        when(fechamentoRepository.findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO))
                 .thenReturn(Optional.of(caixa));
         when(usuarioRepository.findByEmail("func@email.com")).thenReturn(Optional.of(usuario));
         when(tipoServicoService.buscarPorId(1L)).thenReturn(tipoServico);
@@ -103,7 +103,7 @@ class ServicoServiceTest {
 
     @Test
     void pagamentoPendenteSoDeveGerarEntradaQuandoForPago() {
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+        when(fechamentoRepository.findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO))
                 .thenReturn(Optional.of(caixa));
         when(usuarioRepository.findByEmail("func@email.com")).thenReturn(Optional.of(usuario));
         when(tipoServicoService.buscarPorId(1L)).thenReturn(tipoServico);
@@ -147,7 +147,7 @@ class ServicoServiceTest {
     void domicilioDeveUsarPrecoExternoQuandoDisponivel() {
         tipoServico.setPrecoExterno(new BigDecimal("25.00"));
 
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+        when(fechamentoRepository.findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO))
                 .thenReturn(Optional.of(caixa));
         when(usuarioRepository.findByEmail("func@email.com")).thenReturn(Optional.of(usuario));
         when(tipoServicoService.buscarPorId(1L)).thenReturn(tipoServico);
@@ -170,7 +170,7 @@ class ServicoServiceTest {
 
     @Test
     void deveRejeitarRegistroSemCaixaAberto() {
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+        when(fechamentoRepository.findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO))
                 .thenReturn(Optional.empty());
 
         ServicoRequest request = criarRequest(1L, 1, FormaPagamento.DINHEIRO, false, false);
@@ -200,6 +200,7 @@ class ServicoServiceTest {
         servico.setFechamentoDiario(caixa);
 
         when(servicoRepository.findById(1L)).thenReturn(Optional.of(servico));
+        when(fechamentoRepository.findByIdParaAtualizar(caixa.getId())).thenReturn(Optional.of(caixa));
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> servicoService.cancelar(1L, "func@email.com"));
@@ -222,6 +223,7 @@ class ServicoServiceTest {
         servico.setGarantia(false);
 
         when(servicoRepository.findById(7L)).thenReturn(Optional.of(servico));
+        when(fechamentoRepository.findByIdParaAtualizar(caixa.getId())).thenReturn(Optional.of(caixa));
         when(usuarioRepository.findByEmail("dono@email.com")).thenReturn(Optional.of(dono));
 
         servicoService.cancelar(7L, "dono@email.com");
@@ -238,7 +240,7 @@ class ServicoServiceTest {
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> servicoService.registrar(request, "func@email.com"));
         assertEquals("Endereço é obrigatório em atendimento a domicílio", ex.getMessage());
-        verify(fechamentoRepository, never()).findByDataAndStatus(any(), any());
+        verify(fechamentoRepository, never()).findByDataAndStatusParaAtualizar(any(), any());
     }
 
     @Test
@@ -265,7 +267,7 @@ class ServicoServiceTest {
     void deveRejeitarValorTotalAcimaDoLimite() {
         tipoServico.setPreco(new BigDecimal("99999999.99"));
 
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+        when(fechamentoRepository.findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO))
                 .thenReturn(Optional.of(caixa));
         when(usuarioRepository.findByEmail("func@email.com")).thenReturn(Optional.of(usuario));
         when(tipoServicoService.buscarPorId(1L)).thenReturn(tipoServico);

@@ -120,7 +120,7 @@ class CaixaServiceTest {
                 new BigDecimal("200.00"), usuario);
         fechamento.setId(1L);
 
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+        when(fechamentoRepository.findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO))
                 .thenReturn(Optional.of(fechamento));
         when(movimentacaoRepository.findByFechamentoDiarioId(1L)).thenReturn(Collections.emptyList());
         when(servicoRepository.findByFechamentoDiarioId(1L)).thenReturn(Collections.emptyList());
@@ -133,7 +133,7 @@ class CaixaServiceTest {
 
     @Test
     void deveRejeitarFechamentoSemCaixaAberto() {
-        when(fechamentoRepository.findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO))
+        when(fechamentoRepository.findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO))
                 .thenReturn(Optional.empty());
 
         assertThrows(RuntimeException.class, () -> caixaService.fecharCaixa(null));
@@ -224,7 +224,9 @@ class CaixaServiceTest {
         assertEquals(2, resultado.getTotalServicos());
         assertEquals(2, resultado.getTotalChaves());
         verify(servicoRepository, never()).findByDataHoraBetween(any(), any());
-        verify(fechamentoRepository).save(fechamento);
+        // Consulta é só leitura: os totais calculados vão para o DTO, a entidade gerenciada
+        // pelo Hibernate nunca é alterada nem salva (Task 6)
+        verify(fechamentoRepository, never()).save(any());
     }
 
     @Test
@@ -246,6 +248,7 @@ class CaixaServiceTest {
         assertEquals(new BigDecimal("200.00"), resultado.getTotalEntradas());
         assertEquals(new BigDecimal("30.00"), resultado.getTotalSaidas());
         assertEquals(new BigDecimal("270.00"), resultado.getSaldoFinal());
+        verify(fechamentoRepository, never()).save(any());
     }
 
     private FechamentoDiario fechado(LocalDate data) {

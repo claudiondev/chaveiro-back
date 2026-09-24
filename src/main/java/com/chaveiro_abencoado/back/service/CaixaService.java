@@ -59,7 +59,8 @@ public class CaixaService {
         return FechamentoResponse.fromEntity(fechamento);
     }
 
-    @Transactional
+    // Só leitura: nunca bloqueia linha nem altera a entidade gerenciada (ver montarComprovante)
+    @Transactional(readOnly = true)
     public FechamentoResponse consultarHoje() {
         FechamentoDiario fechamento = fechamentoRepository
                 .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
@@ -69,8 +70,8 @@ public class CaixaService {
         return montarComprovante(fechamento);
     }
 
-    // Histórico: consultar caixa de qualquer data
-    @Transactional
+    // Histórico: consultar caixa de qualquer data. Só leitura, mesma garantia acima.
+    @Transactional(readOnly = true)
     public FechamentoResponse consultarPorData(LocalDate data) {
         FechamentoDiario fechamento = fechamentoRepository.findTopByDataOrderByIdDesc(data)
                 .orElseThrow(() -> new NotFoundException("Nenhum caixa encontrado para " + data));
@@ -78,16 +79,23 @@ public class CaixaService {
         return montarComprovante(fechamento);
     }
 
-    // Caixa fechado é congelado: os totais gravados no fechamento não são recalculados
+    // Caixa fechado é congelado: os totais gravados no fechamento não são recalculados.
+    // Caixa aberto: os totais são calculados só para a resposta — a entidade gerenciada
+    // pelo Hibernate nunca é alterada aqui (@Transactional(readOnly = true) nos métodos
+    // acima também desliga o auto-flush, então mesmo um dirty-check acidental não geraria
+    // UPDATE; ainda assim colocamos os valores num objeto à parte, nunca nos setters da entidade).
     private FechamentoResponse montarComprovante(FechamentoDiario fechamento) {
         List<ServicoRealizado> servicos = servicoRepository.findByFechamentoDiarioId(fechamento.getId());
 
-        if (fechamento.getStatus() == StatusFechamento.ABERTO) {
-            atualizarTotais(fechamento, servicos);
-            fechamentoRepository.save(fechamento);
-        }
-
         FechamentoResponse response = FechamentoResponse.fromEntity(fechamento);
+        if (fechamento.getStatus() == StatusFechamento.ABERTO) {
+            TotaisCaixa totais = calcularTotais(fechamento, servicos);
+            response.setTotalEntradas(totais.entradas());
+            response.setTotalSaidas(totais.saidas());
+            response.setSaldoFinal(totais.saldoFinal());
+            response.setTotalServicos(totais.totalServicos());
+            response.setTotalChaves(totais.totalChaves());
+        }
         response.setServicos(ServicoResumoDTO.agruparPorTipo(servicos));
         return response;
     }
@@ -105,7 +113,7 @@ public class CaixaService {
     @Transactional
     public void registrarMovimentacao(MovimentacaoRequest request, String emailUsuario) {
         FechamentoDiario caixaAberto = fechamentoRepository
-                .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
+                .findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO)
                 .orElseThrow(() -> new BusinessException("Caixa não está aberto"));
 
         Usuario usuario = buscarUsuario(emailUsuario);
@@ -124,11 +132,18 @@ public class CaixaService {
 
     @Transactional
     public FechamentoResponse fecharCaixa(String observacao) {
+        // Bloqueia a linha antes de calcular: nenhum registro/movimentação concorrente
+        // termina de gravar depois que o fechamento já leu os totais (Task 6).
         FechamentoDiario fechamento = fechamentoRepository
-                .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
+                .findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO)
                 .orElseThrow(() -> new BusinessException("Nenhum caixa aberto para fechar"));
 
-        atualizarTotais(fechamento, servicoRepository.findByFechamentoDiarioId(fechamento.getId()));
+        TotaisCaixa totais = calcularTotais(fechamento, servicoRepository.findByFechamentoDiarioId(fechamento.getId()));
+        fechamento.setTotalEntradas(totais.entradas());
+        fechamento.setTotalSaidas(totais.saidas());
+        fechamento.setSaldoFinal(totais.saldoFinal());
+        fechamento.setTotalServicos(totais.totalServicos());
+        fechamento.setTotalChaves(totais.totalChaves());
         fechamento.setStatus(StatusFechamento.FECHADO);
         fechamento.setObservacao(observacao);
         fechamentoRepository.save(fechamento);
@@ -136,8 +151,9 @@ public class CaixaService {
         return FechamentoResponse.fromEntity(fechamento);
     }
 
-    // Serviços vêm pelo vínculo com o caixa, não pelo horário de registro
-    private void atualizarTotais(FechamentoDiario fechamento, List<ServicoRealizado> servicos) {
+    // Serviços vêm pelo vínculo com o caixa, não pelo horário de registro. Não mexe na
+    // entidade — devolve os números calculados para quem chamar decidir se persiste.
+    private TotaisCaixa calcularTotais(FechamentoDiario fechamento, List<ServicoRealizado> servicos) {
         List<MovimentacaoCaixa> movimentacoes = movimentacaoRepository
                 .findByFechamentoDiarioId(fechamento.getId());
 
@@ -156,11 +172,12 @@ public class CaixaService {
                 .mapToInt(ServicoRealizado::getQuantidade)
                 .sum();
 
-        fechamento.setTotalEntradas(entradas);
-        fechamento.setTotalSaidas(saidas);
-        fechamento.setSaldoFinal(fechamento.getValorAbertura().add(entradas).subtract(saidas));
-        fechamento.setTotalServicos(servicos.size());
-        fechamento.setTotalChaves(totalChaves);
+        BigDecimal saldoFinal = fechamento.getValorAbertura().add(entradas).subtract(saidas);
+        return new TotaisCaixa(entradas, saidas, saldoFinal, servicos.size(), totalChaves);
+    }
+
+    private record TotaisCaixa(BigDecimal entradas, BigDecimal saidas, BigDecimal saldoFinal,
+                               int totalServicos, int totalChaves) {
     }
 
     private Usuario buscarUsuario(String email) {

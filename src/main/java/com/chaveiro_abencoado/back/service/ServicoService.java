@@ -105,7 +105,14 @@ public class ServicoService {
             throw new BusinessException("Só é possível cancelar serviços do dia atual");
         }
 
-        if (servico.getFechamentoDiario().getStatus() == StatusFechamento.FECHADO) {
+        // Bloqueia a linha do caixa e reconfere o status nela, não na associação já
+        // carregada em memória — um fechamento concorrente pode ter fechado o caixa
+        // entre o momento em que este serviço foi lido e este ponto.
+        FechamentoDiario caixa = fechamentoRepository
+                .findByIdParaAtualizar(servico.getFechamentoDiario().getId())
+                .orElseThrow(() -> new NotFoundException("Caixa do serviço não encontrado"));
+
+        if (caixa.getStatus() == StatusFechamento.FECHADO) {
             throw new BusinessException("Caixa já fechado; não é possível cancelar o serviço");
         }
 
@@ -120,7 +127,7 @@ public class ServicoService {
         if (!servico.isGarantia()) {
             movimentacaoRepository.deleteByDescricaoStartingWithAndFechamentoDiarioId(
                     "Serviço #" + servico.getId() + ":",
-                    servico.getFechamentoDiario().getId()
+                    caixa.getId()
             );
         }
 
@@ -144,9 +151,12 @@ public class ServicoService {
         }
     }
 
+    // Bloqueia a linha do caixa: registrar serviço/pagamento e fechar o caixa nunca
+    // terminam entrelaçados na mesma data (Task 6). No máximo uma linha de fechamento
+    // é bloqueada por transação, então não há ordem a coordenar entre chamadas diferentes.
     private FechamentoDiario buscarCaixaAberto() {
         return fechamentoRepository
-                .findByDataAndStatus(LocalDate.now(), StatusFechamento.ABERTO)
+                .findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO)
                 .orElseThrow(() -> new BusinessException("Caixa não está aberto. Abra o caixa antes de registrar serviços"));
     }
 
