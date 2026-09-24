@@ -45,6 +45,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/auth/usuarios").hasRole("DONO")
                 .requestMatchers(HttpMethod.PATCH, "/api/auth/usuarios/*/status").hasRole("DONO")
 
+                // Ajuda contextual — progresso sempre pertence ao usuário autenticado
+                .requestMatchers("/api/ajuda/**").authenticated()
+
                 // Swagger
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
