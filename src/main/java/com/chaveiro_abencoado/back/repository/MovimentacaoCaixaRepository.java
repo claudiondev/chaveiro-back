@@ -12,7 +12,5 @@ public interface MovimentacaoCaixaRepository extends JpaRepository<MovimentacaoC
 
     List<MovimentacaoCaixa> findByFechamentoDiarioIdIn(Collection<Long> fechamentoIds);
 
-    void deleteByDescricaoAndFechamentoDiarioId(String descricao, Long fechamentoDiarioId);
-
-    void deleteByDescricaoStartingWithAndFechamentoDiarioId(String descricao, Long fechamentoDiarioId);
+    void deleteByServicoRealizadoId(Long servicoRealizadoId);
 }

@@ -77,7 +77,8 @@ class ServicoServiceTest {
 
         assertEquals(new BigDecimal("30.00"), dto.getValorTotal());
         assertEquals("Chave simples", dto.getTipoServicoNome());
-        verify(movimentacaoRepository).save(argThat(m -> m.getFormaPagamento() == FormaPagamento.PIX));
+        verify(movimentacaoRepository).save(argThat(m ->
+                m.getFormaPagamento() == FormaPagamento.PIX && m.getServicoRealizado().getId().equals(1L)));
     }
 
     @Test
@@ -132,7 +133,7 @@ class ServicoServiceTest {
         pendente.setFormaPagamento(FormaPagamento.PIX);
         pendente.setStatusPagamento(StatusPagamento.PENDENTE);
         pendente.setDataHora(LocalDateTime.now());
-        when(servicoRepository.findById(4L)).thenReturn(Optional.of(pendente));
+        when(servicoRepository.findByIdParaAtualizar(4L)).thenReturn(Optional.of(pendente));
 
         ServicoDTO pago = servicoService.marcarComoPago(4L, "func@email.com");
 
@@ -140,7 +141,38 @@ class ServicoServiceTest {
         verify(movimentacaoRepository).save(argThat(m ->
                 m.getValor().compareTo(new BigDecimal("15.00")) == 0
                         && m.getFormaPagamento() == FormaPagamento.PIX
-                        && m.getFechamentoDiario().getId().equals(caixa.getId())));
+                        && m.getFechamentoDiario().getId().equals(caixa.getId())
+                        && m.getServicoRealizado().getId().equals(4L)));
+    }
+
+    @Test
+    void deveRejeitarSegundoPagamentoQuandoConstraintDoBancoPegaARaceCondition() {
+        // Duas chamadas concorrentes de marcarComoPago(4L) serializam no lock; a que
+        // ganha muda pra PAGO e commita antes da outra. Aqui simulamos a segunda: mesmo
+        // que o lock nao tivesse pego (cenario hipotetico), a constraint UNIQUE do banco
+        // (V7) impede duas entradas pro mesmo servico.
+        ServicoRealizado pendente = new ServicoRealizado();
+        pendente.setId(4L);
+        pendente.setTipoServico(tipoServico);
+        pendente.setUsuario(usuario);
+        pendente.setFechamentoDiario(caixa);
+        pendente.setQuantidade(1);
+        pendente.setValorUnitario(new BigDecimal("15.00"));
+        pendente.setValorTotal(new BigDecimal("15.00"));
+        pendente.setFormaPagamento(FormaPagamento.PIX);
+        pendente.setStatusPagamento(StatusPagamento.PENDENTE);
+        pendente.setDataHora(LocalDateTime.now());
+
+        when(servicoRepository.findByIdParaAtualizar(4L)).thenReturn(Optional.of(pendente));
+        when(usuarioRepository.findByEmail("func@email.com")).thenReturn(Optional.of(usuario));
+        when(fechamentoRepository.findByDataAndStatusParaAtualizar(LocalDate.now(), StatusFechamento.ABERTO))
+                .thenReturn(Optional.of(caixa));
+        when(movimentacaoRepository.save(any(MovimentacaoCaixa.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uk_movimentacoes_servico_realizado"));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> servicoService.marcarComoPago(4L, "func@email.com"));
+        assertEquals("Serviço já está pago", ex.getMessage());
     }
 
     @Test
@@ -205,7 +237,7 @@ class ServicoServiceTest {
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> servicoService.cancelar(1L, "func@email.com"));
         assertEquals("Caixa já fechado; não é possível cancelar o serviço", ex.getMessage());
-        verify(movimentacaoRepository, never()).deleteByDescricaoStartingWithAndFechamentoDiarioId(any(), any());
+        verify(movimentacaoRepository, never()).deleteByServicoRealizadoId(any());
         verify(servicoRepository, never()).delete(any());
     }
 
@@ -228,8 +260,7 @@ class ServicoServiceTest {
 
         servicoService.cancelar(7L, "dono@email.com");
 
-        verify(movimentacaoRepository).deleteByDescricaoStartingWithAndFechamentoDiarioId(
-                "Serviço #7:", caixa.getId());
+        verify(movimentacaoRepository).deleteByServicoRealizadoId(7L);
         verify(servicoRepository).delete(servico);
     }
 

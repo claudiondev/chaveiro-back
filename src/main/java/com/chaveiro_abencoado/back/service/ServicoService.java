@@ -11,6 +11,7 @@ import com.chaveiro_abencoado.back.repository.FechamentoDiarioRepository;
 import com.chaveiro_abencoado.back.repository.MovimentacaoCaixaRepository;
 import com.chaveiro_abencoado.back.repository.ServicoRealizadoRepository;
 import com.chaveiro_abencoado.back.repository.UsuarioRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,10 +76,11 @@ public class ServicoService {
                 .toList();
     }
 
-    // Marcar serviço pendente como pago
+    // Marcar serviço pendente como pago. Bloqueia a linha do serviço: duas chamadas
+    // concorrentes para o mesmo id serializam, então só a primeira gera a entrada.
     @Transactional
     public ServicoDTO marcarComoPago(Long id, String emailUsuario) {
-        ServicoRealizado servico = servicoRepository.findById(id)
+        ServicoRealizado servico = servicoRepository.findByIdParaAtualizar(id)
                 .orElseThrow(() -> new NotFoundException("Serviço não encontrado"));
 
         if (servico.getStatusPagamento() == StatusPagamento.PAGO) {
@@ -91,7 +93,13 @@ public class ServicoService {
         // Gera movimentação de entrada agora que foi pago
         Usuario usuario = buscarUsuario(emailUsuario);
         FechamentoDiario caixaAberto = buscarCaixaAberto();
-        gerarMovimentacaoEntrada(servico, usuario, caixaAberto);
+        try {
+            gerarMovimentacaoEntrada(servico, usuario, caixaAberto);
+        } catch (DataIntegrityViolationException e) {
+            // Defesa final: uk_movimentacoes_servico_realizado (V7) não permite duas
+            // entradas pro mesmo serviço, mesmo se o lock acima falhar por algum motivo.
+            throw new BusinessException("Serviço já está pago");
+        }
 
         return ServicoDTO.fromEntity(servico);
     }
@@ -123,12 +131,9 @@ public class ServicoService {
             throw new UnauthorizedException("Sem permissão para cancelar este serviço");
         }
 
-        // Remover movimentação de entrada associada (usa ID do serviço para precisão)
+        // Remover a entrada vinculada a este serviço (vínculo por chave estrangeira, não texto)
         if (!servico.isGarantia()) {
-            movimentacaoRepository.deleteByDescricaoStartingWithAndFechamentoDiarioId(
-                    "Serviço #" + servico.getId() + ":",
-                    caixa.getId()
-            );
+            movimentacaoRepository.deleteByServicoRealizadoId(servico.getId());
         }
 
         servicoRepository.delete(servico);
@@ -211,6 +216,7 @@ public class ServicoService {
         movimentacao.setDataHora(LocalDateTime.now());
         movimentacao.setUsuario(usuario);
         movimentacao.setFechamentoDiario(fechamento);
+        movimentacao.setServicoRealizado(servico);
         movimentacaoRepository.save(movimentacao);
     }
 

@@ -43,6 +43,12 @@ public class MovimentacaoCaixa {
     @JoinColumn(name = "fechamento_diario_id")
     private FechamentoDiario fechamentoDiario;
 
+    // Só em ENTRADA gerada por serviço; entrada avulsa fica sem vínculo. Índice único
+    // parcial no banco (V7) garante que um serviço nunca tem mais de uma ENTRADA.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "servico_realizado_id")
+    private ServicoRealizado servicoRealizado;
+
     public MovimentacaoCaixa() {}
 
     public Long getId() {
@@ -115,5 +121,13 @@ public class MovimentacaoCaixa {
 
     public void setFormaPagamento(FormaPagamento formaPagamento) {
         this.formaPagamento = formaPagamento;
+    }
+
+    public ServicoRealizado getServicoRealizado() {
+        return servicoRealizado;
+    }
+
+    public void setServicoRealizado(ServicoRealizado servicoRealizado) {
+        this.servicoRealizado = servicoRealizado;
     }
 }
