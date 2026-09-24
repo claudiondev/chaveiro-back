@@ -34,6 +34,13 @@ public class  Usuario {
     // Incrementada a cada troca de senha; o JWT carrega a versão vigente no momento em
     // que foi emitido. Se não bater com a versão atual do usuário, o token é tratado
     // como revogado (JwtAuthenticationFilter), mesmo sem ter expirado.
+    //
+    // @ColumnDefault é necessário pro ddl-auto=update do dev: sem ele, o Hibernate gera
+    // "ALTER TABLE ... ADD COLUMN versao_sessao integer NOT NULL" sem valor padrão, o que
+    // falha contra qualquer banco já populado (linhas existentes ficariam NULL). Em prod,
+    // quem cria a coluna é o Flyway (V8), que já tem DEFAULT 1 — este annotation só
+    // importa pro dev local.
+    @org.hibernate.annotations.ColumnDefault("1")
     @Column(name = "versao_sessao", nullable = false)
     private int versaoSessao = 1;
 
