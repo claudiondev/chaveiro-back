@@ -16,7 +16,9 @@ com CORS dinâmico, Flyway habilitado e Swagger desligado.
 
 ## 1. Neon (banco)
 
-1. Crie a conta e um **projeto** Postgres. Escolha a região mais perto do Render (passo 2) — reduz latência.
+1. Crie a conta e um **projeto** Postgres. Escolha a região **Ohio (us-east-2)** — combina com o Render (passo 2) e,
+   partindo do Brasil, é mais perto que a costa oeste (Oregon): a conectividade do Brasil com os EUA passa
+   majoritariamente pelo Atlântico/costa leste.
 2. Em **Connect**, desligue _Connection pooling_ e copie a string **direta** (host sem `-pooler`). Formato:
    `postgresql://usuario:senha@host.neon.tech/chaveiro?sslmode=require`.
 3. Quebre essa string em três variáveis (é o formato que `application-prod.properties` espera):
@@ -27,8 +29,7 @@ com CORS dinâmico, Flyway habilitado e Swagger desligado.
 ## 2. Render (API)
 
 1. **New > Blueprint**, escolha o repositório `claudiondev/chaveiro.back`. O Render lê o `render.yaml`.
-2. Ajuste a `region` do blueprint pra combinar com a região escolhida no Neon (o arquivo vem com `oregon`; troque
-   antes de aplicar se o Neon estiver em outra região dos EUA).
+2. O blueprint já vem com `region: ohio` (combina com o Neon em Ohio, passo 1). Só troque se escolher outra região.
 3. Ele vai pedir os valores marcados `sync: false` no `render.yaml`:
 
    | Variável | Valor |
