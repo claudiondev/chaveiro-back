@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: chaveiro-back
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DONO_INICIAL_NOME
+        sync: false
+      - key: DONO_INICIAL_EMAIL
+        sync: false
+      - key: DONO_INICIAL_SENHA
+        sync: false

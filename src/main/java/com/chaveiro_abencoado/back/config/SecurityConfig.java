@@ -53,6 +53,9 @@ public class SecurityConfig {
                     .authenticationEntryPoint(jsonErrorResponse(HttpStatus.UNAUTHORIZED, "Não autenticado"))
                     .accessDeniedHandler(jsonAccessDeniedResponse()))
             .authorizeHttpRequests(auth -> auth
+                // Health check (Render + UptimeRobot)
+                .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
+
                 // Auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/cadastro").hasRole("DONO")
