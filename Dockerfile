@@ -1,7 +1,9 @@
-# Build em JDK 21 (não 17): o openpdf-3.0.5.jar foi compilado com Java 21 (class file major
-# version 65) e o javac do JDK 17 não consegue nem ler esse .class ("bad class file"), só
-# compilar. O bytecode final continua Java 17 — o pom.xml mantém java.version=17, que o
-# Spring Boot Parent usa como --release — por isso o runtime abaixo segue em JRE 17.
+# openpdf-3.0.5.jar foi compilado com Java 21 (class file major version 65) — tanto build quanto
+# runtime precisam ser JDK/JRE 21, não só o build. Com runtime em JRE 17, o jar sobe, o Spring
+# começa a inicializar e só quebra na hora de instanciar o FechamentoPdfService:
+# UnsupportedClassVersionError em org.openpdf.text.pdf.draw.DrawInterface ("class file version
+# 65.0 ... este runtime só reconhece até 61.0"). O pom.xml mantém java.version=17 (nosso próprio
+# bytecode via --release continua 17), mas isso não rebaixa bytecode de dependência já compilada.
 FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
 COPY .mvn/ .mvn/
@@ -10,7 +12,7 @@ RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
 COPY src/ src/
 RUN ./mvnw package -DskipTests -B
 
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
