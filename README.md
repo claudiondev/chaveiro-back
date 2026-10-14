@@ -10,7 +10,7 @@
 ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=white)
 ![Maven](https://img.shields.io/badge/Maven-C71A36?style=for-the-badge&logo=apachemaven&logoColor=white)
 
-![Status](https://img.shields.io/badge/Status-🚀%20MVP%20completo-0F6E56?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-🚀%20Em%20produção-0F6E56?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-Proprietária-red?style=for-the-badge)
 
 **API REST para gestão completa de um chaveiro: serviços, caixa, produção de chaves, atendimento a domicílio e fechamento diário.**
@@ -27,7 +27,7 @@ Princípio de design que guiou todo o backend: **cada toque na tela deve registr
 
 Este repositório é o **backend** da plataforma — uma API REST em Java 17 e Spring Boot 4, com autenticação JWT, controle de acesso por perfil e PostgreSQL como banco.
 
-> **Fase atual:** MVP completo — auth, tipos de serviço, registro de serviços, caixa/movimentações e relatórios implementados e validados ponta a ponta. Preparando deploy (Render + Neon).
+> **Fase atual:** em produção — backend no Render, banco no Neon (PostgreSQL) e frontend na Vercel, com auth, tipos de serviço, registro de serviços, caixa/movimentações e relatórios validados ponta a ponta. Fase 2 (V2) em andamento.
 
 ---
 
@@ -269,13 +269,16 @@ docker run -p 8080:8080 \
 
 ---
 
-## 🌐 Deploy (planejado)
+## 🌐 Deploy
+
+Em produção desde 14/10/2026. Roteiro completo de configuração (Neon → Render → UptimeRobot) em [DEPLOY.md](DEPLOY.md).
 
 | Camada | Serviço | Variáveis |
 |---|---|---|
 | Backend | Render (Docker, profile `prod`) | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `CORS_ORIGINS` |
-| Banco | Neon PostgreSQL (free tier) | — |
+| Banco | Neon PostgreSQL (free tier, região Ohio) | — |
 | Frontend | Vercel | `VITE_API_URL` |
+| Uptime | UptimeRobot (`GET /api/health` a cada 5min) | — |
 
 ---
 
